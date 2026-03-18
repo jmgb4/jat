@@ -1,0 +1,488 @@
+{% extends "base.html" %}
+{% block title %}Sequencer – Job Application Tailor{% endblock %}
+{% block brand_sub %}Model pipeline sequencer{% endblock %}
+{% block nav_sequencer %}active{% endblock %}
+
+{% block extra_head %}
+<style>
+    :root {
+        --parallel: #9a5a18;
+        --parallel-light: #f0e6d6;
+    }
+
+    .seq-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r);
+        box-shadow: var(--s-card);
+        overflow: hidden;
+    }
+    .seq-card-header {
+        background: linear-gradient(92deg, var(--accent) 0%, var(--accent-h) 100%);
+        padding: 0.75rem 1.1rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.5rem;
+        border-bottom: 1px solid rgba(255,255,255,0.15);
+    }
+    .seq-card-header span { font-weight: 700; font-size: 1.05rem; letter-spacing: .02em; color: #fff; }
+    .seq-card-body { padding: 1.1rem; }
+    .seq-card-footer {
+        background: var(--surface2);
+        border-top: 1px solid var(--border);
+        padding: 0.65rem 1.1rem;
+        font-size: 0.88rem;
+        color: var(--muted);
+    }
+
+    .step-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r);
+        box-shadow: var(--s-sm);
+        transition: border-color .15s, box-shadow .15s, transform .15s;
+        user-select: none;
+    }
+    .step-card:hover {
+        box-shadow: 0 2px 7px rgba(0,0,0,0.09), 0 6px 18px rgba(0,0,0,0.07);
+        transform: translateY(-1px);
+    }
+    .step-card.drag-over {
+        border-color: var(--accent-h);
+        box-shadow: 0 0 0 2px rgba(59,88,120,.28);
+    }
+    .step-card.dragging { opacity: 0.45; transform: scale(0.98); }
+    .step-card-inner {
+        padding: 0.85rem 1rem;
+        display: flex;
+        align-items: flex-start;
+        gap: 0.65rem;
+    }
+
+    .drag-handle {
+        color: var(--border-strong);
+        cursor: grab;
+        font-size: 1.1rem;
+        line-height: 1.6rem;
+        flex-shrink: 0;
+        padding: 0 2px;
+        border-radius: 4px;
+        transition: color .15s;
+    }
+    .drag-handle:hover { color: var(--accent-h); }
+    .drag-handle:active { cursor: grabbing; }
+
+    .step-body { flex: 1; min-width: 0; }
+    .step-row1 {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.4rem;
+    }
+    .step-label { font-weight: 600; font-size: 0.97rem; color: var(--text); }
+    .step-badge {
+        display: inline-block;
+        padding: 0.15rem 0.5rem;
+        border-radius: 20px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        letter-spacing: .03em;
+        text-transform: uppercase;
+    }
+    .badge-draft   { background: var(--accent-light); color: var(--accent); border: 1px solid #b0c4d8; }
+    .badge-review  { background: var(--success-light); color: var(--success); border: 1px solid #98c8ae; }
+    .badge-apply   { background: var(--accent-light); color: var(--accent-h); border: 1px solid #b0c4d8; }
+    .badge-refine  { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+    .badge-polish  { background: var(--parallel-light); color: var(--parallel); border: 1px solid #d8b898; }
+
+    .step-select {
+        width: 100%;
+        background: var(--surface2);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: var(--r-sm);
+        padding: 0.45rem 0.75rem;
+        font-size: 0.97rem;
+        appearance: none;
+        -webkit-appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%237a7870'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 0.65rem center;
+        cursor: pointer;
+        box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
+        transition: border-color .15s, box-shadow .15s;
+    }
+    .step-select:focus { outline: none; border-color: var(--accent-h); box-shadow: 0 0 0 3px rgba(59,88,120,.16); }
+    .step-select option { background: var(--surface); color: var(--text); }
+
+    .parallel-row {
+        display: none;
+        align-items: center;
+        gap: 0.4rem;
+        margin-top: 0.45rem;
+    }
+    .parallel-row.visible { display: flex; }
+    .parallel-toggle {
+        width: 32px; height: 17px;
+        background: var(--border-strong);
+        border-radius: 9px;
+        position: relative;
+        cursor: pointer;
+        border: none;
+        padding: 0;
+        flex-shrink: 0;
+        transition: background .2s;
+    }
+    .parallel-toggle.on { background: var(--parallel); }
+    .parallel-toggle::after {
+        content: '';
+        position: absolute;
+        width: 11px; height: 11px;
+        background: #fff;
+        border-radius: 50%;
+        top: 3px; left: 3px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+        transition: left .2s;
+    }
+    .parallel-toggle.on::after { left: 18px; }
+    .parallel-label { font-size: 0.88rem; color: var(--muted); }
+    .parallel-label.on { color: var(--parallel); font-weight: 600; }
+    .parallel-badge {
+        display: inline-block;
+        padding: 0.1rem 0.4rem;
+        border-radius: 10px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        background: var(--parallel-light);
+        color: var(--parallel);
+        border: 1px solid #d8b898;
+        margin-left: auto;
+    }
+
+    .btn-remove {
+        background: transparent;
+        border: 1px solid var(--border);
+        border-radius: var(--r-sm);
+        color: var(--muted);
+        font-size: 0.9rem;
+        padding: 0.25rem 0.6rem;
+        cursor: pointer;
+        flex-shrink: 0;
+        transition: border-color .15s, color .15s, background .15s;
+        line-height: 1;
+    }
+    .btn-remove:hover:not(:disabled) { border-color: var(--danger); color: var(--danger); background: var(--danger-light); }
+    .btn-remove:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    .btn-primary-jat {
+        background: linear-gradient(135deg, var(--accent), var(--accent-h));
+        border: none;
+        color: #fff;
+        padding: 0.55rem 1.4rem;
+        border-radius: var(--r-sm);
+        font-weight: 600;
+        font-size: 0.97rem;
+        cursor: pointer;
+        box-shadow: 0 1px 3px rgba(59,88,120,.3), 0 3px 10px rgba(59,88,120,.2);
+        transition: opacity .15s, box-shadow .15s, transform .1s;
+    }
+    .btn-primary-jat:hover { opacity: .9; box-shadow: 0 2px 7px rgba(59,88,120,.4), 0 6px 16px rgba(59,88,120,.25); transform: translateY(-1px); }
+    .btn-primary-jat:active { transform: none; }
+    .btn-secondary-jat {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        color: var(--text-2);
+        padding: 0.55rem 1.4rem;
+        border-radius: var(--r-sm);
+        font-size: 0.97rem;
+        font-weight: 500;
+        cursor: pointer;
+        box-shadow: var(--s-sm);
+        transition: border-color .15s, color .15s, box-shadow .15s;
+    }
+    .btn-secondary-jat:hover { border-color: var(--accent-h); color: var(--accent); box-shadow: 0 2px 7px rgba(59,88,120,.14); }
+    .btn-add {
+        background: var(--surface2);
+        border: 1.5px dashed var(--border-strong);
+        color: var(--text-2);
+        padding: 0.4rem 1rem;
+        border-radius: var(--r-sm);
+        font-size: 0.9rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: border-color .15s, color .15s, background .15s;
+    }
+    .btn-add:hover { border-color: var(--accent-h); color: var(--accent); background: var(--accent-light); }
+
+    #msg { font-size: 0.9rem; color: var(--muted); min-height: 1.1em; margin-top: 0.5rem; }
+    #msg.ok    { color: var(--success); }
+    #msg.error { color: var(--danger); }
+
+    #steps { display: flex; flex-direction: column; gap: 0.55rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+    <div class="seq-card">
+        <div class="seq-card-header">
+            <span>Pipeline Steps</span>
+            <button id="add" class="btn-add">+ Add step</button>
+        </div>
+        <div class="seq-card-body">
+            <div id="steps"></div>
+            <div class="d-flex gap-2 mt-3 flex-wrap">
+                <button id="save" class="btn-primary-jat">Save</button>
+                <button id="reset" class="btn-secondary-jat">Reset</button>
+            </div>
+            <div id="msg"></div>
+        </div>
+        <div class="seq-card-footer">
+            Saved to browser storage. Used by the home page when you Generate.
+            Steps run as: draft &rarr; review &rarr; apply &rarr; refine(s) &rarr; polish.
+            Cloud (DeepSeek) steps can be toggled to run in parallel — they receive the previous step's output simultaneously.
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    var V3_KEY = 'jat_sequence_v3';
+    var V2_KEY = 'jat_model_sequence_v2';
+    var _models = [];
+    var _dragSrcIdx = null;
+
+    function getSequence() {
+        try {
+            var raw = localStorage.getItem(V3_KEY);
+            if (raw) {
+                var arr = JSON.parse(raw);
+                if (Array.isArray(arr) && arr.length > 0 && typeof arr[0] === 'object') return arr;
+            }
+        } catch (e) {}
+        try {
+            var raw2 = localStorage.getItem(V2_KEY);
+            if (raw2) {
+                var arr2 = JSON.parse(raw2);
+                if (Array.isArray(arr2) && arr2.length > 0 && typeof arr2[0] === 'string') {
+                    return arr2.map(function (id) { return { id: id, parallel: false }; });
+                }
+            }
+        } catch (e) {}
+        return null;
+    }
+
+    function setSequence(arr) {
+        localStorage.setItem(V3_KEY, JSON.stringify(arr));
+    }
+
+    function isCloud(id) {
+        return (id || '').startsWith('deepseek:');
+    }
+
+    function labelFor(i, n) {
+        return 'Step ' + (i + 1);
+    }
+
+    function badgeFor(i, n) {
+        if (i === 0)           return ['draft',  'Draft'];
+        if (i === n - 1)       return ['polish', 'Polish'];
+        if (n >= 4 && i === 1) return ['review', 'Review'];
+        if (n >= 4 && i === 2) return ['apply',  'Apply'];
+        return ['refine', 'Refine'];
+    }
+
+    function setMsg(t, cls) {
+        var el = document.getElementById('msg');
+        el.textContent = t || '';
+        el.className = cls || '';
+    }
+
+    function fillSelect(sel, models, currentId) {
+        sel.innerHTML = '';
+        (models || []).forEach(function (m) {
+            var opt = document.createElement('option');
+            opt.value = m.id;
+            var icon = m.source_icon ? m.source_icon + ' ' : '';
+            if (m.available === false) {
+                opt.disabled = true;
+                opt.textContent = icon + m.display_name + ' (unavailable)';
+                if (m.availability_reason) opt.title = m.availability_reason;
+            } else {
+                opt.textContent = icon + m.display_name;
+            }
+            sel.appendChild(opt);
+        });
+        if (currentId) sel.value = currentId;
+    }
+
+    function render(seq) {
+        var host = document.getElementById('steps');
+        host.innerHTML = '';
+        var n = seq.length;
+
+        seq.forEach(function (item, idx) {
+            var mid = item.id || '';
+            var isParallel = !!item.parallel && isCloud(mid);
+            var bPair = badgeFor(idx, n);
+
+            var card = document.createElement('div');
+            card.className = 'step-card';
+            card.draggable = true;
+            card.dataset.idx = idx;
+
+            card.innerHTML =
+                '<div class="step-card-inner">' +
+                '  <div class="drag-handle" title="Drag to reorder">&#10783;</div>' +
+                '  <div class="step-body">' +
+                '    <div class="step-row1">' +
+                '      <span class="step-label">' + labelFor(idx, n) + '</span>' +
+                '      <span class="step-badge badge-' + bPair[0] + '">' + bPair[1] + '</span>' +
+                '      <button class="btn-remove" data-remove="' + idx + '"' + (n <= 1 ? ' disabled' : '') + '>&#x2715;</button>' +
+                '    </div>' +
+                '    <select class="step-select" data-sel="' + idx + '"></select>' +
+                '    <div class="parallel-row' + (isCloud(mid) ? ' visible' : '') + '" data-par-row="' + idx + '">' +
+                '      <button class="parallel-toggle' + (isParallel ? ' on' : '') + '" data-par-btn="' + idx + '" title="Run in parallel with previous step (DeepSeek API only)"></button>' +
+                '      <span class="parallel-label' + (isParallel ? ' on' : '') + '" data-par-lbl="' + idx + '">' + (isParallel ? 'Parallel' : 'Sequential') + '</span>' +
+                '      <span class="parallel-badge" style="' + (isParallel ? '' : 'display:none') + '" data-par-badge="' + idx + '">PARALLEL</span>' +
+                '    </div>' +
+                '  </div>' +
+                '</div>';
+
+            host.appendChild(card);
+            var sel = card.querySelector('select[data-sel]');
+            fillSelect(sel, _models, mid);
+
+            sel.addEventListener('change', function () {
+                var row = host.querySelector('[data-par-row="' + idx + '"]');
+                if (row) row.classList.toggle('visible', isCloud(sel.value));
+            });
+        });
+
+        host.querySelectorAll('.step-card').forEach(function (card) {
+            card.addEventListener('dragstart', _onDragStart);
+            card.addEventListener('dragover',  _onDragOver);
+            card.addEventListener('dragleave', _onDragLeave);
+            card.addEventListener('drop',      _onDrop);
+            card.addEventListener('dragend',   _onDragEnd);
+        });
+    }
+
+    function currentFromUI() {
+        var out = [];
+        document.querySelectorAll('[data-sel]').forEach(function (sel) {
+            var idx = parseInt(sel.dataset.sel, 10);
+            var btn = document.querySelector('[data-par-btn="' + idx + '"]');
+            out.push({ id: sel.value || '', parallel: btn ? btn.classList.contains('on') : false });
+        });
+        return out;
+    }
+
+    function _onDragStart(e) {
+        _dragSrcIdx = parseInt(this.dataset.idx, 10);
+        this.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', String(_dragSrcIdx));
+    }
+    function _onDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; this.classList.add('drag-over'); }
+    function _onDragLeave() { this.classList.remove('drag-over'); }
+    function _onDrop(e) {
+        e.preventDefault();
+        this.classList.remove('drag-over');
+        var targetIdx = parseInt(this.dataset.idx, 10);
+        if (_dragSrcIdx === null || _dragSrcIdx === targetIdx) return;
+        var seq = currentFromUI();
+        var moved = seq.splice(_dragSrcIdx, 1)[0];
+        seq.splice(targetIdx, 0, moved);
+        _dragSrcIdx = null;
+        render(seq);
+    }
+    function _onDragEnd() {
+        this.classList.remove('dragging');
+        document.querySelectorAll('.step-card').forEach(function (c) { c.classList.remove('drag-over'); });
+        _dragSrcIdx = null;
+    }
+
+    document.getElementById('steps').addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-par-btn]');
+        if (btn) {
+            var idx = btn.dataset.parBtn;
+            btn.classList.toggle('on');
+            var lbl = document.querySelector('[data-par-lbl="' + idx + '"]');
+            var badge = document.querySelector('[data-par-badge="' + idx + '"]');
+            var isOn = btn.classList.contains('on');
+            if (lbl) { lbl.textContent = isOn ? 'Parallel' : 'Sequential'; lbl.classList.toggle('on', isOn); }
+            if (badge) badge.style.display = isOn ? '' : 'none';
+            return;
+        }
+        var rem = e.target.closest('[data-remove]');
+        if (rem) {
+            var ridx = parseInt(rem.dataset.remove, 10);
+            var seq = currentFromUI();
+            if (seq.length <= 1) return;
+            seq.splice(ridx, 1);
+            render(seq);
+        }
+    });
+
+    document.getElementById('add').addEventListener('click', function () {
+        if (!_models.length) return;
+        var seq = currentFromUI();
+        seq.push({ id: _models[0].id, parallel: false });
+        render(seq);
+    });
+
+    document.getElementById('save').addEventListener('click', function () {
+        var seq = currentFromUI();
+        if (seq.some(function (x) { return !x.id; })) {
+            setMsg('Select a model for each step.', 'error');
+            return;
+        }
+        setSequence(seq);
+        setMsg('Saved ' + seq.length + ' step' + (seq.length !== 1 ? 's' : '') + '.', 'ok');
+    });
+
+    document.getElementById('reset').addEventListener('click', function () {
+        localStorage.removeItem(V3_KEY);
+        localStorage.removeItem(V2_KEY);
+        setMsg('Reset. Reload to restore defaults.');
+        loadModels();
+    });
+
+    async function loadModels() {
+        try {
+            var r = await fetch('/api/models/installed');
+            var data = await r.json();
+            _models = (data.models || []);
+        } catch (e) {
+            setMsg('Failed to load models — is the server running?', 'error');
+            return;
+        }
+        if (_models.length === 0) {
+            setMsg('No models found. Start Ollama or add a DEEPSEEK_API_KEY in .env.', 'error');
+            return;
+        }
+        var seq = getSequence();
+        if (!seq) {
+            var first = _models[0].id;
+            seq = [
+                { id: first, parallel: false },
+                { id: first, parallel: false },
+                { id: first, parallel: false },
+                { id: first, parallel: false },
+            ];
+        }
+        var known = new Set(_models.map(function (m) { return m.id; }));
+        seq = seq.map(function (x) {
+            return { id: known.has(x.id) ? x.id : _models[0].id, parallel: !!x.parallel };
+        });
+        render(seq);
+        setMsg(localStorage.getItem(V3_KEY) ? 'Loaded saved sequence.' : 'Using defaults.');
+    }
+
+    loadModels();
+})();
+</script>
+{% endblock %}

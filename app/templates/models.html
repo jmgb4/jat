@@ -1,0 +1,446 @@
+{% extends "base.html" %}
+{% block title %}Models – Job Application Tailor{% endblock %}
+{% block brand_sub %}Manage models{% endblock %}
+{% block nav_models %}active{% endblock %}
+
+{% block content %}
+    <div id="downloads-panel" class="card shadow-sm mb-3 d-none">
+        <div class="card-header">Downloads</div>
+        <div class="card-body" id="downloads-body"></div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-12 col-lg-6">
+            <div class="card shadow-sm mb-3">
+                <div class="card-header">Search</div>
+                <div class="card-body">
+                    <div class="input-group">
+                        <input id="q" class="form-control" placeholder="Search HuggingFace for GGUF models">
+                        <button id="search" class="btn btn-outline-primary" type="button">Search</button>
+                    </div>
+                    <div class="small text-muted mt-2">Results are limited to repos that provide GGUF files.</div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Result</th>
+                                    <th>GGUF</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="search-body">
+                                <tr><td colspan="3" class="text-muted p-3">Search to see results.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>Installed</span>
+                    <button id="refresh-local" class="btn btn-sm btn-outline-secondary" type="button">Refresh</button>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th class="text-end">Size</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="local-body">
+                                <tr><td colspan="3" class="text-muted p-3">Loading…</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mt-3">
+                <div class="card-header">Model details</div>
+                <div class="card-body">
+                    <pre id="model-details" class="small mb-0" style="white-space: pre-wrap; max-height: 260px; overflow:auto;">Select "Info" on a local model.</pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-lg-6">
+            <div class="card shadow-sm">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>Catalog</span>
+                    <button id="refresh-catalog" class="btn btn-sm btn-outline-secondary" type="button">Refresh</button>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Params</th>
+                                    <th>VRAM</th>
+                                    <th>Notes</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="catalog-body">
+                                <tr><td colspan="5" class="text-muted p-3">Loading…</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card-footer small text-muted">
+                    Catalog is a curated local list from <code>data/models_catalog.json</code>.
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    var activeDownloads = {};
+    var recentDownloads = [];
+    function esc(s) {
+        return (s || '').toString()
+            .replaceAll('&','&amp;').replaceAll('<','&lt;')
+            .replaceAll('>','&gt;').replaceAll('"','&quot;')
+            .replaceAll("'","&#39;");
+    }
+    function showDownloadsPanel() {
+        var panel = document.getElementById('downloads-panel');
+        var has = Object.keys(activeDownloads).length > 0 || (recentDownloads && recentDownloads.length > 0);
+        if (has) panel.classList.remove('d-none');
+        else panel.classList.add('d-none');
+    }
+
+    function renderDownloadRow(id) {
+        var body = document.getElementById('downloads-body');
+        var rowId = 'dl-row-' + id;
+        var existing = document.getElementById(rowId);
+        if (existing) return existing;
+        var wrap = document.createElement('div');
+        wrap.id = rowId; wrap.className = 'mb-3';
+        wrap.innerHTML =
+            '<div class="d-flex justify-content-between align-items-center mb-1">' +
+            '  <strong class="small" data-dl-label></strong>' +
+            '  <div class="d-flex align-items-center gap-2">' +
+            '    <span class="small text-muted" data-dl-pct></span>' +
+            '    <button class="btn btn-sm btn-outline-danger py-0" type="button" data-dl-cancel>Stop</button>' +
+            '  </div>' +
+            '</div>' +
+            '<div class="progress mb-1" style="height: 10px;">' +
+            '  <div class="progress-bar" role="progressbar" style="width: 0%" data-dl-bar></div>' +
+            '</div>' +
+            '<div class="small text-muted" data-dl-status></div>';
+        body.appendChild(wrap);
+        return wrap;
+    }
+
+    function updateDownloadRow(id) {
+        var st = activeDownloads[id];
+        if (!st) return;
+        var row = renderDownloadRow(id);
+        row.querySelector('[data-dl-label]').textContent = st.label || id;
+        var pctEl = row.querySelector('[data-dl-pct]');
+        var bar = row.querySelector('[data-dl-bar]');
+        var status = row.querySelector('[data-dl-status]');
+        var pct = null;
+        if (st.total && st.completed) pct = Math.max(0, Math.min(100, (st.completed / st.total) * 100));
+        pctEl.textContent = (pct === null) ? '' : (pct.toFixed(1) + '%');
+        bar.style.width = (pct === null) ? '0%' : (pct.toFixed(1) + '%');
+        status.textContent = st.statusText || 'Working…';
+    }
+
+    function removeDownload(id, delayMs) {
+        setTimeout(function() {
+            delete activeDownloads[id];
+            var row = document.getElementById('dl-row-' + id);
+            if (row) row.remove();
+            showDownloadsPanel();
+        }, delayMs || 1500);
+    }
+
+    function startDownload(downloadId, label, onDone) {
+        activeDownloads[downloadId] = { label: label || downloadId, statusText: 'Starting…', total: 0, completed: 0 };
+        showDownloadsPanel();
+        updateDownloadRow(downloadId);
+        var es = new EventSource('/api/downloads/stream/' + downloadId);
+        activeDownloads[downloadId]._es = es;
+        es.onmessage = function(ev) {
+            try {
+                var msg = JSON.parse(ev.data);
+                var st = activeDownloads[downloadId];
+                if (!st) return;
+                if (msg.total !== undefined) st.total = msg.total || 0;
+                if (msg.completed !== undefined) st.completed = msg.completed || 0;
+                var status = msg.status || 'Working…';
+                if (msg.error) status = status + ' — ' + msg.error;
+                if (st.total) status = status + ' ' + fmtBytes(st.completed) + ' / ' + fmtBytes(st.total);
+                st.statusText = status;
+                updateDownloadRow(downloadId);
+                if (msg.done || msg.status === 'success' || msg.status === 'error' || msg.status === 'cancelled') {
+                    es.close();
+                    if (onDone) { try { onDone(msg); } catch(e) {} }
+                    removeDownload(downloadId, 2000);
+                }
+            } catch (e) {}
+        };
+        es.onerror = function() {
+            var st = activeDownloads[downloadId];
+            if (st) { st.statusText = 'Stream error.'; updateDownloadRow(downloadId); }
+            es.close();
+            if (onDone) { try { onDone({status:'error', error:'stream error'}); } catch(e) {} }
+            removeDownload(downloadId, 2500);
+        };
+    }
+
+    async function cancelDownload(downloadId) {
+        try { await fetch('/api/downloads/' + downloadId + '/cancel', { method: 'POST' }); } catch (e) {}
+        var st = activeDownloads[downloadId];
+        if (st && st._es) { try { st._es.close(); } catch(e) {} }
+        if (st) { st.statusText = 'cancelled'; updateDownloadRow(downloadId); }
+        removeDownload(downloadId, 500);
+    }
+
+    function fmtBytes(b) {
+        if (!b && b !== 0) return '–';
+        var units = ['B','KB','MB','GB','TB'];
+        var i = 0; var n = b;
+        while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+        return n.toFixed(i === 0 ? 0 : 1) + ' ' + units[i];
+    }
+
+    async function loadLocal() {
+        var body = document.getElementById('local-body');
+        body.innerHTML = '<tr><td colspan="3" class="text-muted p-3">Loading…</td></tr>';
+        try {
+            var r = await fetch('/api/models/installed');
+            var data = await r.json();
+            var models = data.models || [];
+            if (!models.length) {
+                body.innerHTML = '<tr><td colspan="3" class="text-muted p-3">No models found.</td></tr>';
+                return;
+            }
+            body.innerHTML = '';
+            models.forEach(function(m) {
+                var tr = document.createElement('tr');
+                var name = m.display_name || '';
+                var safeModel = m.ollama_model || name;
+                var size = m.size || null;
+                var mid = m.id || '';
+                tr.innerHTML =
+                    '<td><code>' + (m.source_icon ? (m.source_icon + ' ') : '') + name + '</code></td>' +
+                    '<td class="text-end">' + fmtBytes(size) + '</td>' +
+                    '<td class="text-end">' +
+                    (m.runtime === 'ollama'
+                      ? ('  <button class="btn btn-sm btn-outline-primary me-1" data-action="info" data-model="' + safeModel + '">Info</button>' +
+                         '  <button class="btn btn-sm btn-outline-danger" data-action="delete" data-model="' + safeModel + '">Delete</button>')
+                      : '') +
+                    ((m.runtime !== 'ollama' && m.runtime !== 'deepseek')
+                      ? ('  <button class="btn btn-sm btn-outline-danger" data-action="uninstall" data-model-id="' + mid + '" data-model="' + name + '">Remove</button>')
+                      : '') +
+                    '</td>';
+                body.appendChild(tr);
+            });
+        } catch (e) {
+            body.innerHTML = '<tr><td colspan="3" class="text-danger p-3">Failed to load.</td></tr>';
+        }
+    }
+
+    async function loadCatalog() {
+        var body = document.getElementById('catalog-body');
+        body.innerHTML = '<tr><td colspan="5" class="text-muted p-3">Loading…</td></tr>';
+        try {
+            var r = await fetch('/api/models/catalog');
+            var data = await r.json();
+            var models = data.models || [];
+            body.innerHTML = '';
+            models.forEach(function(m) {
+                var name = m.name || '';
+                var tr = document.createElement('tr');
+                var kind = (m.kind || 'ollama');
+                var actionHtml = '';
+                if (kind === 'gguf' && m.repo_id && m.filename) {
+                    actionHtml = '<button class="btn btn-sm btn-primary" data-action="install-catalog-gguf" data-repo="' + esc(m.repo_id) + '" data-filename="' + esc(m.filename) + '" data-display-name="' + esc(m.display_name || name) + '">Install</button>';
+                } else {
+                    actionHtml = '<button class="btn btn-sm btn-primary" data-action="pull" data-model="' + name + '">Download</button>';
+                }
+                tr.innerHTML =
+                    '<td><code>' + name + '</code></td>' +
+                    '<td>' + (m.params || '–') + '</td>' +
+                    '<td>' + (m.approx_vram_gb || '–') + '</td>' +
+                    '<td class="small">' + (m.notes || '') + '</td>' +
+                    '<td class="text-end">' + actionHtml + '</td>';
+                body.appendChild(tr);
+            });
+            if (!models.length) {
+                body.innerHTML = '<tr><td colspan="5" class="text-muted p-3">Catalog is empty.</td></tr>';
+            }
+        } catch (e) {
+            body.innerHTML = '<tr><td colspan="5" class="text-danger p-3">Failed to load catalog.</td></tr>';
+        }
+    }
+
+    async function showInfo(model) {
+        var pre = document.getElementById('model-details');
+        pre.textContent = 'Loading…';
+        try {
+            var r = await fetch('/api/models/show', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model: model, verbose: false })
+            });
+            pre.textContent = JSON.stringify(await r.json(), null, 2);
+        } catch (e) { pre.textContent = 'Failed.'; }
+    }
+
+    async function deleteModel(model) {
+        if (!confirm('Delete model ' + model + '?')) return;
+        var r = await fetch('/api/models/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: model }) });
+        if (!r.ok) {
+            var msg = 'Delete failed.';
+            try { var d = await r.json(); if (d && d.detail) msg = typeof d.detail === 'string' ? d.detail : JSON.stringify(d.detail); } catch(e) {}
+            alert(msg);
+        }
+        await loadLocal();
+    }
+
+    async function uninstallModel(modelId, name) {
+        if (!confirm('Remove model ' + name + '?')) return;
+        var r = await fetch('/api/models/uninstall', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model_id: modelId }) });
+        if (!r.ok) {
+            var msg = 'Remove failed.';
+            try { var d = await r.json(); if (d && d.detail) msg = typeof d.detail === 'string' ? d.detail : JSON.stringify(d.detail); } catch(e) {}
+            alert(msg);
+        }
+        await loadLocal();
+    }
+
+    async function pullModel(model) {
+        var r = await fetch('/api/models/pull', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: model }) });
+        var data = await r.json();
+        startDownload(data.download_id, model, function(){ loadLocal(); });
+    }
+
+    async function runSearch() {
+        var q = document.getElementById('q').value || '';
+        var body = document.getElementById('search-body');
+        body.innerHTML = '<tr><td colspan="3" class="text-muted p-3">Searching…</td></tr>';
+        try {
+            var r = await fetch('/api/models/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: q }) });
+            var data = await r.json();
+            var results = data.results || [];
+            if (!results.length) {
+                body.innerHTML = '<tr><td colspan="3" class="text-muted p-3">No results.</td></tr>';
+                return;
+            }
+            body.innerHTML = '';
+            results.forEach(function(it) {
+                var repo = it.repo_id;
+                var ggufs = it.gguf_files || [];
+                var tr = document.createElement('tr');
+                tr.innerHTML =
+                    '<td><code>⬡ ' + repo + '</code></td>' +
+                    '<td class="small"><select class="form-select form-select-sm" data-gguf-picker="' + repo + '">' +
+                    ggufs.map(function(f){ return '<option value="' + f + '">' + f + '</option>'; }).join('') +
+                    '</select>' +
+                    '<div class="mt-1"><button class="btn btn-sm btn-outline-secondary" type="button" data-action="toggle-advanced" data-repo="' + repo + '">Advanced</button></div>' +
+                    '<div class="mt-2 d-none" data-advanced="' + repo + '">' +
+                    '  <div class="row g-2">' +
+                    '    <div class="col-4"><input class="form-control form-control-sm" placeholder="ctx" value="8192" data-param-n-ctx="' + repo + '"></div>' +
+                    '    <div class="col-4"><input class="form-control form-control-sm" placeholder="temp" value="0.3" data-param-temp="' + repo + '"></div>' +
+                    '    <div class="col-4"><input class="form-control form-control-sm" placeholder="top_p" value="0.95" data-param-top-p="' + repo + '"></div>' +
+                    '  </div>' +
+                    '  <div class="small text-muted mt-1">Optional tuning (ctx/temp/top_p).</div>' +
+                    '</div>' +
+                    '</td>' +
+                    '<td class="text-end"><button class="btn btn-sm btn-primary" data-action="install" data-repo="' + repo + '">Install</button></td>';
+                body.appendChild(tr);
+            });
+        } catch(e) {
+            body.innerHTML = '<tr><td colspan="3" class="text-danger p-3">Search failed.</td></tr>';
+        }
+    }
+
+    async function installRepo(repo) {
+        var sel = document.querySelector('[data-gguf-picker="' + repo + '"]');
+        var filename = sel ? sel.value : '';
+        if (!filename) return;
+        var nCtxEl = document.querySelector('[data-param-n-ctx="' + repo + '"]');
+        var tempEl  = document.querySelector('[data-param-temp="' + repo + '"]');
+        var topPEl  = document.querySelector('[data-param-top-p="' + repo + '"]');
+        var nCtx = nCtxEl ? parseInt(nCtxEl.value || '0', 10) : 0;
+        var temp = tempEl ? parseFloat(tempEl.value || '') : NaN;
+        var topP = topPEl ? parseFloat(topPEl.value || '') : NaN;
+        var llamacppParams = {};
+        if (nCtx && !isNaN(nCtx)) llamacppParams.n_ctx = nCtx;
+        if (!isNaN(temp)) llamacppParams.temperature = temp;
+        if (!isNaN(topP)) llamacppParams.top_p = topP;
+        var r = await fetch('/api/models/install', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repo_id: repo, filename: filename, display_name: repo + ':' + filename, llamacpp_params: llamacppParams }) });
+        var data = await r.json();
+        startDownload(data.download_id, repo + ' / ' + filename, function(){ loadLocal(); });
+    }
+
+    async function installCatalogGguf(repoId, filename, displayName) {
+        var r = await fetch('/api/models/install', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repo_id: repoId, filename: filename, display_name: displayName || (repoId + ':' + filename) }) });
+        var data = await r.json();
+        startDownload(data.download_id, repoId + ' / ' + filename, function(){ loadLocal(); });
+    }
+
+    async function resumeActiveDownloads() {
+        try {
+            var r = await fetch('/api/downloads');
+            var data = await r.json();
+            var dls = data.downloads || [];
+            recentDownloads = dls.slice(0, 8);
+            showDownloadsPanel();
+            dls.forEach(function(d) {
+                if (!d || !d.download_id) return;
+                if (activeDownloads[d.download_id]) return;
+                if (!d.done) { startDownload(d.download_id, d.label || d.download_id, function(){ loadLocal(); }); return; }
+                activeDownloads[d.download_id] = { label: d.label || d.download_id, statusText: (d.status || '') + (d.error ? (' — ' + d.error) : ''), total: d.total || 0, completed: d.completed || 0, _done: true };
+                updateDownloadRow(d.download_id);
+                removeDownload(d.download_id, 15000);
+            });
+        } catch (e) {}
+    }
+
+    document.addEventListener('click', function(e) {
+        var btn = e.target;
+        if (!btn || !btn.dataset) return;
+        var action = btn.dataset.action;
+        if (!action) return;
+        if (action === 'info') return showInfo(btn.dataset.model);
+        if (action === 'delete') return deleteModel(btn.dataset.model);
+        if (action === 'pull') return pullModel(btn.dataset.model);
+        if (action === 'uninstall') return uninstallModel(btn.dataset.modelId, btn.dataset.model);
+        if (action === 'install') return installRepo(btn.dataset.repo);
+        if (action === 'install-catalog-gguf') return installCatalogGguf(btn.dataset.repo, btn.dataset.filename, btn.dataset.displayName);
+        if (action === 'toggle-advanced') {
+            var repo = btn.dataset.repo;
+            var box = document.querySelector('[data-advanced="' + repo + '"]');
+            if (box) box.classList.toggle('d-none');
+        }
+    });
+
+    document.getElementById('downloads-body').addEventListener('click', function(e) {
+        var t = e.target;
+        if (!t || !t.hasAttribute || !t.hasAttribute('data-dl-cancel')) return;
+        var row = t.closest('[id^="dl-row-"]');
+        var id = row ? row.id.replace('dl-row-', '') : null;
+        if (id) cancelDownload(id);
+    });
+
+    document.getElementById('refresh-local').addEventListener('click', loadLocal);
+    document.getElementById('refresh-catalog').addEventListener('click', loadCatalog);
+    document.getElementById('search').addEventListener('click', runSearch);
+    document.getElementById('q').addEventListener('keydown', function(e) { if (e.key === 'Enter') runSearch(); });
+    loadLocal();
+    loadCatalog();
+    resumeActiveDownloads();
+</script>
+{% endblock %}

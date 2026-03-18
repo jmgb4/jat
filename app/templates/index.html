@@ -1,0 +1,556 @@
+{% extends "base.html" %}
+{% block title %}Job Application Tailor{% endblock %}
+{% block nav_home %}active{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* ── Hero search area ─────────────────────────────────────── */
+    .jat-hero {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 3.5rem 1rem 2rem;
+        text-align: center;
+    }
+    .jat-hero-logo {
+        font-size: 3.2rem;
+        font-weight: 800;
+        letter-spacing: -0.04em;
+        color: var(--accent);
+        margin-bottom: 0.2rem;
+        line-height: 1;
+    }
+    .jat-hero-tagline {
+        font-size: 1rem;
+        color: var(--muted);
+        margin-bottom: 2rem;
+    }
+
+    /* ── URL input box (Google-style) ─────────────────────────── */
+    .jat-search-wrap {
+        width: 100%;
+        max-width: 760px;
+        position: relative;
+    }
+    .jat-url-area {
+        width: 100%;
+        min-height: 56px;
+        max-height: 200px;
+        resize: vertical;
+        padding: 0.85rem 1.2rem;
+        font-size: 1.05rem;
+        border: 2px solid var(--border);
+        border-radius: 28px;
+        background: var(--surface);
+        color: var(--text);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08), 0 6px 20px rgba(0,0,0,0.05);
+        transition: border-color .2s, box-shadow .2s;
+        font-family: inherit;
+        line-height: 1.5;
+    }
+    .jat-url-area:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 2px 8px rgba(59,88,120,0.2), 0 6px 24px rgba(59,88,120,0.12);
+    }
+    .jat-url-area::placeholder { color: var(--muted); }
+    .jat-search-hint {
+        font-size: 0.8rem;
+        color: var(--muted);
+        margin-top: 0.45rem;
+        text-align: left;
+    }
+    .jat-search-hint #url-count {
+        font-weight: 600;
+        color: var(--accent);
+    }
+
+    /* ── Action buttons ───────────────────────────────────────── */
+    .jat-search-actions {
+        display: flex;
+        gap: 0.75rem;
+        margin-top: 1.25rem;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    .jat-generate-btn {
+        padding: 0.65rem 2.4rem;
+        font-size: 1rem;
+        font-weight: 600;
+        border-radius: 24px;
+        background: linear-gradient(135deg, var(--accent), var(--accent-h));
+        color: #fff;
+        border: none;
+        box-shadow: 0 2px 6px rgba(59,88,120,0.35), 0 6px 18px rgba(59,88,120,0.2);
+        cursor: pointer;
+        transition: all .18s;
+    }
+    .jat-generate-btn:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(59,88,120,0.45), 0 10px 28px rgba(59,88,120,0.25);
+    }
+    .jat-generate-btn:active { transform: none; }
+    .jat-generate-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── Alerts ───────────────────────────────────────────────── */
+    .jat-alert-wrap {
+        width: 100%;
+        max-width: 760px;
+    }
+
+    /* ── Base resume picker ───────────────────────────────────── */
+    .jat-picker-wrap {
+        width: 100%;
+        max-width: 760px;
+    }
+
+    /* ── Sequence strip (bottom of hero) ─────────────────────── */
+    .jat-seq-strip {
+        width: 100%;
+        max-width: 760px;
+        margin-top: 0.9rem;
+        padding: 0.55rem 1rem;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: var(--r-sm);
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        flex-wrap: wrap;
+        font-size: 0.82rem;
+    }
+    .jat-seq-strip .seq-label {
+        color: var(--text-2);
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    .jat-seq-strip .seq-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.3rem;
+        flex: 1;
+    }
+    .jat-seq-strip .seq-edit {
+        white-space: nowrap;
+        font-size: 0.78rem;
+        color: var(--accent);
+        text-decoration: none;
+        border: 1px solid var(--border);
+        padding: 0.18rem 0.55rem;
+        border-radius: var(--r-sm);
+        background: var(--surface);
+    }
+    .jat-seq-strip .seq-edit:hover {
+        background: var(--accent-light);
+        border-color: var(--accent);
+    }
+
+    /* ── Recent jobs section ──────────────────────────────────── */
+    .jat-recent {
+        width: 100%;
+        padding: 0 1rem 3rem;
+    }
+    .jat-recent-title {
+        font-size: 0.82rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        margin-bottom: 0.75rem;
+        padding-bottom: 0.4rem;
+        border-bottom: 1px solid var(--border);
+    }
+    .jat-recent-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 0.75rem;
+    }
+    .jat-recent-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r);
+        padding: 0.85rem 1rem;
+        box-shadow: var(--s-sm);
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+        transition: box-shadow .15s, border-color .15s;
+        text-decoration: none;
+        color: inherit;
+    }
+    .jat-recent-card:hover {
+        border-color: var(--accent-h);
+        box-shadow: 0 2px 8px rgba(59,88,120,0.14), 0 6px 20px rgba(59,88,120,0.08);
+        text-decoration: none;
+        color: inherit;
+    }
+    .jat-recent-card-title {
+        font-weight: 600;
+        font-size: 0.92rem;
+        color: var(--text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .jat-recent-card-url {
+        font-size: 0.75rem;
+        color: var(--muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .jat-recent-card-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        margin-top: 0.2rem;
+    }
+    .jat-recent-card-date {
+        font-size: 0.73rem;
+        color: var(--muted);
+    }
+    .status-dot {
+        width: 7px; height: 7px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        display: inline-block;
+    }
+    .dot-complete { background: var(--success); }
+    .dot-error    { background: var(--danger); }
+    .dot-pending  { background: #c07828; }
+    .dot-default  { background: var(--accent); }
+</style>
+{% endblock %}
+
+{% block content %}
+
+    <!-- ── Hero ──────────────────────────────────────────────────── -->
+    <div class="jat-hero">
+
+        <div class="jat-hero-logo">JAT</div>
+        <div class="jat-hero-tagline">Paste a job posting URL — get a tailored resume &amp; cover letter</div>
+
+        <!-- Alerts -->
+        <div class="jat-alert-wrap">
+            <div id="base-resume-alert" class="alert alert-warning d-none mb-2" role="alert"></div>
+        </div>
+
+        <!-- Role-based resume notice (shown when leadership + engineering resumes are used by role) -->
+        <div id="base-resume-role-based-msg" class="alert alert-info d-none mb-2" role="status">
+            Resume will be chosen automatically by job role (leadership vs engineering) or both if unclear.
+        </div>
+        <!-- Base resume picker (shown when multiple resumes exist) -->
+        <div id="base-resume-picker" class="jat-picker-wrap d-none mb-2">
+            <div class="card">
+                <div class="card-header">Select base resume</div>
+                <div class="card-body">
+                    <div class="d-flex gap-2 align-items-end">
+                        <div class="flex-fill">
+                            <label for="base-resume-select" class="form-label">Resume file in <code>data/base_resume/</code></label>
+                            <select id="base-resume-select" class="form-select"></select>
+                        </div>
+                        <button id="base-resume-save" class="btn btn-outline-primary" type="button">Use this</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search box -->
+        <div class="jat-search-wrap">
+            <textarea
+                id="url-input"
+                class="jat-url-area"
+                rows="1"
+                placeholder="https://jobs.example.com/posting/…  (one URL per line to queue multiple)"
+                oninput="onUrlInput()"
+            ></textarea>
+            <div class="jat-search-hint">
+                <span id="url-count-wrap" class="d-none">
+                    <span id="url-count">0</span> URL<span id="url-plural">s</span> queued
+                    &nbsp;·&nbsp;
+                </span>
+                Separate multiple URLs by newline to queue them all at once
+            </div>
+        </div>
+
+        <!-- Buttons -->
+        <div class="jat-search-actions">
+            <button id="generate-btn" class="jat-generate-btn" disabled onclick="submitJobs()">Generate</button>
+            <a href="/history" class="btn btn-outline-secondary" style="border-radius:24px;padding:0.65rem 1.6rem;font-size:1rem;">View History</a>
+        </div>
+
+        <!-- Active sequence strip -->
+        <div id="seq-strip" class="jat-seq-strip d-none">
+            <span class="seq-label">Active sequence:</span>
+            <div class="seq-badges" id="seq-badges"></div>
+            <a href="/sequencer" class="seq-edit">Edit</a>
+        </div>
+        <div id="seq-none-msg" class="jat-search-hint mt-2 d-none">
+            No sequence saved. <a href="/sequencer" style="color:var(--accent);">Configure in Sequencer</a>.
+        </div>
+    </div>
+
+    <!-- ── Recent applications ───────────────────────────────────── -->
+    <div class="jat-recent">
+        <div class="jat-recent-title">Recent applications</div>
+        <div id="recent-grid" class="jat-recent-grid">
+            <div style="color:var(--muted);font-size:0.88rem;padding:0.5rem 0;">Loading…</div>
+        </div>
+        <div id="recent-more" class="d-none" style="margin-top:0.75rem;text-align:center;">
+            <a href="/history" style="font-size:0.88rem;color:var(--accent);">View all in History →</a>
+        </div>
+    </div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    var V3_KEY = 'jat_sequence_v3';
+    var V2_KEY = 'jat_model_sequence_v2';
+
+    /* ── Sequence helpers ─────────────────────────────────────── */
+    function getSequence() {
+        try {
+            var raw = localStorage.getItem(V3_KEY);
+            if (raw) {
+                var arr = JSON.parse(raw);
+                if (Array.isArray(arr) && arr.length > 0 && typeof arr[0] === 'object') {
+                    return { ids: arr.map(function(x){ return x.id || ''; }), flags: arr.map(function(x){ return !!x.parallel; }) };
+                }
+            }
+        } catch(e) {}
+        try {
+            var raw2 = localStorage.getItem(V2_KEY);
+            if (raw2) {
+                var arr2 = JSON.parse(raw2);
+                if (Array.isArray(arr2) && arr2.length > 0 && typeof arr2[0] === 'string') {
+                    return { ids: arr2, flags: arr2.map(function(){ return false; }) };
+                }
+            }
+        } catch(e) {}
+        return null;
+    }
+
+    function badgeColor(mid) {
+        if (!mid) return 'secondary';
+        if (mid.startsWith('deepseek:') || mid === 'deepseek') return 'primary';
+        if (mid.startsWith('gguf:')) return 'warning';
+        if (mid.startsWith('hf:')) return 'info';
+        return 'success';
+    }
+
+    function renderSequence() {
+        var seq = getSequence();
+        var strip = document.getElementById('seq-strip');
+        var noneMsg = document.getElementById('seq-none-msg');
+        var badges = document.getElementById('seq-badges');
+        if (!seq || seq.ids.length === 0) {
+            strip.classList.add('d-none');
+            noneMsg.classList.remove('d-none');
+            return;
+        }
+        noneMsg.classList.add('d-none');
+        strip.classList.remove('d-none');
+        badges.innerHTML = '';
+        seq.ids.forEach(function(mid, idx) {
+            var span = document.createElement('span');
+            var short = (mid || '').replace(/^(ollama:|gguf:|hf:|deepseek:)/, '');
+            var prefix = (mid || '').split(':')[0];
+            span.className = 'badge text-bg-' + badgeColor(mid);
+            span.title = mid;
+            span.textContent = 'Pass ' + (idx + 1) + ': ' + short + ' [' + prefix + ']' + (seq.flags[idx] ? ' \u2551' : '');
+            badges.appendChild(span);
+        });
+    }
+
+    /* ── URL input ────────────────────────────────────────────── */
+    window.onUrlInput = function() {
+        var ta = document.getElementById('url-input');
+        var val = ta.value;
+        var urls = val.split('\n').map(function(s){ return s.trim(); }).filter(function(s){ return s.length > 0; });
+        var btn = document.getElementById('generate-btn');
+        var countWrap = document.getElementById('url-count-wrap');
+        var count = document.getElementById('url-count');
+        var plural = document.getElementById('url-plural');
+        if (urls.length > 0) {
+            btn.disabled = _resumeBlocked;
+            countWrap.classList.remove('d-none');
+            count.textContent = urls.length;
+            plural.textContent = urls.length === 1 ? '' : 's';
+            // Auto-grow textarea
+            ta.style.height = 'auto';
+            ta.style.height = Math.min(ta.scrollHeight, 200) + 'px';
+        } else {
+            btn.disabled = true;
+            countWrap.classList.add('d-none');
+            ta.style.height = '';
+        }
+    };
+
+    /* ── Submit ───────────────────────────────────────────────── */
+    window.submitJobs = async function() {
+        var ta = document.getElementById('url-input');
+        var urls = ta.value.split('\n').map(function(s){ return s.trim(); }).filter(function(s){ return s.length > 0; });
+        if (urls.length === 0) return;
+        var btn = document.getElementById('generate-btn');
+        btn.disabled = true;
+        btn.textContent = 'Queuing…';
+
+        var seq = getSequence();
+        var seqIds = seq ? seq.ids : null;
+        var seqFlags = seq ? seq.flags : null;
+
+        try {
+            var r = await fetch('/start-batch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ urls: urls, model_sequence: seqIds, parallel_flags: seqFlags })
+            });
+            var data = await r.json();
+            if (!r.ok) {
+                if (data && data.detail && data.detail.base_resume) {
+                    refreshBaseResumeStatus();
+                    btn.disabled = false;
+                    btn.textContent = 'Generate';
+                    return;
+                }
+                throw new Error(data.detail || 'Failed');
+            }
+            var ids = data.job_ids || [];
+            if (ids.length === 1) {
+                window.location.href = '/job/' + ids[0];
+            } else {
+                window.location.href = '/jobs';
+            }
+        } catch(err) {
+            alert('Failed to start: ' + err.message);
+            btn.disabled = false;
+            btn.textContent = 'Generate';
+        }
+    };
+
+    /* ── Base resume status ───────────────────────────────────── */
+    var _resumeBlocked = false;
+
+    function showAlert(msg) {
+        var el = document.getElementById('base-resume-alert');
+        el.textContent = msg;
+        el.classList.remove('d-none');
+    }
+    function hideAlert() { document.getElementById('base-resume-alert').classList.add('d-none'); }
+    function showPicker(candidates) {
+        var picker = document.getElementById('base-resume-picker');
+        var sel = document.getElementById('base-resume-select');
+        sel.innerHTML = '';
+        (candidates || []).forEach(function(name) {
+            var opt = document.createElement('option');
+            opt.value = name; opt.textContent = name;
+            sel.appendChild(opt);
+        });
+        picker.classList.remove('d-none');
+    }
+    function hidePicker() { document.getElementById('base-resume-picker').classList.add('d-none'); }
+
+    function refreshBaseResumeStatus() {
+        return fetch('/base-resume').then(function(r){ return r.json(); }).then(function(s) {
+            hideAlert(); hidePicker();
+            var roleBasedEl = document.getElementById('base-resume-role-based-msg');
+            if (roleBasedEl) roleBasedEl.classList.add('d-none');
+            if (s.status === 'missing') {
+                _resumeBlocked = true;
+                showAlert('No base resume found in data/base_resume/. Add a .docx or .txt file.');
+                return;
+            }
+            if (s.status === 'multiple' && !s.role_based) {
+                _resumeBlocked = true;
+                showAlert('Multiple base resumes found. Select which one to use:');
+                showPicker(s.candidates || []);
+                return;
+            }
+            if (s.status === 'ok' && s.role_based && roleBasedEl) {
+                roleBasedEl.classList.remove('d-none');
+            }
+            _resumeBlocked = false;
+        }).catch(function(){ _resumeBlocked = false; });
+    }
+
+    document.getElementById('base-resume-save').addEventListener('click', function() {
+        var filename = document.getElementById('base-resume-select').value;
+        fetch('/base-resume/select', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({filename: filename}) })
+            .then(function(){ return refreshBaseResumeStatus(); });
+    });
+
+    /* ── Recent history ───────────────────────────────────────── */
+    function esc(s) {
+        return (s||'').toString().replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+    }
+    function dotClass(st) {
+        if (st === 'complete') return 'dot-complete';
+        if (st === 'error') return 'dot-error';
+        if (st === 'pending' || st === 'generating' || st === 'scraping') return 'dot-pending';
+        return 'dot-default';
+    }
+    function formatDate(epoch) {
+        if (!epoch) return '';
+        return new Date(epoch * 1000).toLocaleDateString([], {month:'short', day:'numeric'});
+    }
+
+    function loadRecent() {
+        fetch('/api/history/jobs?limit=12&offset=0').then(function(r){ return r.json(); }).then(function(data) {
+            var grid = document.getElementById('recent-grid');
+            var more = document.getElementById('recent-more');
+            var jobs = data.jobs || [];
+            if (jobs.length === 0) {
+                grid.innerHTML = '<div style="color:var(--muted);font-size:0.88rem;padding:0.5rem 0;">No applications yet. Paste a URL above to get started.</div>';
+                return;
+            }
+            grid.innerHTML = '';
+            jobs.forEach(function(j) {
+                var href = j.job_id ? '/job/' + encodeURIComponent(j.job_id) : '/history';
+                var title = j.job_title || j.url || 'Untitled';
+                var url = j.url || '';
+                var st = j.status || '';
+                var card = document.createElement('a');
+                card.href = href;
+                card.className = 'jat-recent-card';
+                card.innerHTML =
+                    '<div class="jat-recent-card-title">' + esc(title) + '</div>' +
+                    '<div class="jat-recent-card-url">' + esc(url) + '</div>' +
+                    '<div class="jat-recent-card-meta">' +
+                    '  <span class="status-dot ' + dotClass(st) + '"></span>' +
+                    '  <span style="font-size:0.76rem;color:var(--muted);text-transform:capitalize;">' + esc(st) + '</span>' +
+                    '  <span class="jat-recent-card-date">' + formatDate(j.created_at) + '</span>' +
+                    '</div>';
+                grid.appendChild(card);
+            });
+            if ((data.total || 0) > 12) {
+                more.classList.remove('d-none');
+            }
+        }).catch(function(err) {
+            document.getElementById('recent-grid').innerHTML = '<div style="color:var(--muted);font-size:0.88rem;">Could not load history.</div>';
+        });
+    }
+
+    // Enter key submits
+    document.getElementById('url-input').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey && !e.altKey) {
+            var urls = this.value.split('\n').map(function(s){ return s.trim(); }).filter(Boolean);
+            if (urls.length > 0 && !_resumeBlocked) {
+                e.preventDefault();
+                submitJobs();
+            }
+        }
+    });
+
+    refreshBaseResumeStatus().then(function() {
+        // Re-evaluate button state after we know resume status
+        onUrlInput();
+    });
+    renderSequence();
+    loadRecent();
+})();
+</script>
+{% endblock %}

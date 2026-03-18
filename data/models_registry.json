@@ -1,0 +1,28 @@
+[
+  {
+    "id": "ollama:glm-4.7-flash-neo-code",
+    "display_name": "GLM-4.7-Flash-NEO-CODE",
+    "runtime": "ollama",
+    "source_icon": "O",
+    "ollama_model": "glm-4.7-flash-neo-code:latest",
+    "llamacpp_params": {
+      "temperature": 0.8,
+      "top_p": 0.6,
+      "top_k": 2,
+      "num_ctx": 16384
+    }
+  },
+  {
+    "id": "ollama:qwen3:14b",
+    "display_name": "Qwen3-14B",
+    "runtime": "ollama",
+    "source_icon": "O",
+    "ollama_model": "qwen3:14b",
+    "llamacpp_params": {
+      "temperature": 0.6,
+      "top_p": 0.95,
+      "top_k": 20,
+      "num_ctx": 32768
+    }
+  }
+]

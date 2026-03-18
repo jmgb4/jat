@@ -1,0 +1,30 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# SETUP INSTRUCTIONS
+# 1. Copy this file:  cp example_keywords.txt keywords.txt
+# 2. Replace every placeholder with your real tools, skills, and frameworks.
+# 3. The AI uses this file to match your background against job description
+#    language and ensure relevant terms appear naturally in the output.
+#    Be specific — "Nessus" is better than "vulnerability scanner".
+# ─────────────────────────────────────────────────────────────────────────────
+
+## Tools and Platforms
+[Tool 1], [Tool 2], [Cloud provider, e.g. AWS / Azure / GCP],
+[Observability/SIEM tool], [CI/CD platform], [Database or data store],
+[Programming language(s)], [Any other platform central to your work]
+
+## Techniques and Practices
+[Methodology 1, e.g. "vulnerability management"], [Methodology 2],
+[Process you own or contribute to], [Automation approach],
+[Any relevant practice — incident response, threat modeling, code review, etc.]
+
+## Compliance and Frameworks (remove section if not applicable)
+[Framework 1, e.g. NIST CSF], [Framework 2, e.g. SOC 2 / ISO 27001 / FedRAMP],
+[Any audit or governance framework relevant to your work]
+
+## Soft Skills (optional — include only terms that genuinely apply)
+Cross-team collaboration, stakeholder management, technical writing,
+[any others that appear frequently in your target job descriptions]
+
+## Target Roles
+[Exact job title 1 you apply for], [Exact job title 2], [Exact job title 3]
+(The AI uses these to frame language toward the roles you actually want.)

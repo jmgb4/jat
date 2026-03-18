@@ -1,0 +1,44 @@
+[
+  {
+    "name": "qwen3:32b",
+    "params": "32B",
+    "approx_vram_gb": "16-22",
+    "notes": "Strong general instruction model, good for drafting and polishing."
+  },
+  {
+    "name": "gemma3:27b",
+    "params": "27B",
+    "approx_vram_gb": "14-18",
+    "notes": "High quality writing and instruction following."
+  },
+  {
+    "name": "qwen3-coder:30b",
+    "params": "30B",
+    "approx_vram_gb": "16-22",
+    "notes": "Great structured output and rule following. Works well for resumes despite the 'coder' label."
+  },
+  {
+    "name": "qwen3:8b",
+    "params": "8B",
+    "approx_vram_gb": "5-7",
+    "notes": "Fast fallback and summarization model."
+  },
+  {
+    "kind": "gguf",
+    "name": "Phi-4 (GGUF) Q5_K_M",
+    "params": "14B",
+    "approx_vram_gb": "10-12",
+    "notes": "Recommended fact-checker. Downloads from Hugging Face and registers as a GGUF runtime model.",
+    "repo_id": "tensorblock/phi-4-GGUF",
+    "filename": "phi-4-Q5_K_M.gguf",
+    "display_name": "Phi-4-Q5-K-M",
+    "llamacpp_params": { "n_ctx": 8192, "temperature": 0.2, "top_p": 0.8 }
+  },
+  {
+    "name": "mistral:7b",
+    "params": "7B",
+    "approx_vram_gb": "4-6",
+    "notes": "Small, fast, reliable fallback."
+  }
+]
+

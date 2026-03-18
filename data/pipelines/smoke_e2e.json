@@ -1,0 +1,30 @@
+﻿{
+  "name": "smoke_e2e",
+  "resume_steps": [
+    {
+      "name": "Resume smoke draft",
+      "model_id": "ollama:qwen3:14b",
+      "system_prompt": "Write a concise, professional resume draft. Do not invent anything. Output only the resume text.",
+      "prompt_template": "Context:\\n{{context}}\\n\\nWrite a very short resume draft (Summary + 3 bullets for Experience only).",
+      "max_tokens": 160,
+      "params": {
+        "temperature": 0.2,
+        "num_ctx": 4096
+      }
+    }
+  ],
+  "cover_steps": [
+    {
+      "name": "Cover smoke draft",
+      "model_id": "ollama:qwen3:14b",
+      "system_prompt": "Write a concise, professional cover letter. Do not invent anything. Output only the cover letter text.",
+      "prompt_template": "Job title: {{job_title}}\\n\\nContext:\\n{{context}}\\n\\nWrite a very short cover letter (3 short paragraphs).",
+      "max_tokens": 160,
+      "params": {
+        "temperature": 0.2,
+        "num_ctx": 4096
+      }
+    }
+  ]
+}
+

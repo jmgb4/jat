@@ -1,0 +1,51 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# SETUP INSTRUCTIONS
+# 1. Copy this file:  cp example_role_adaptation.txt role_adaptation.txt
+# 2. Create one section for each major role category you apply for.
+# 3. Be specific about which projects/skills to emphasize or downplay for each
+#    role type. The AI uses this to adjust framing when it detects a matching
+#    role in the job description.
+# ─────────────────────────────────────────────────────────────────────────────
+
+## [Role Type 1, e.g. "Software Engineer / Backend Engineer"]
+
+Emphasize: [skills and projects most relevant to this role — e.g. system design,
+API development, performance optimization, testing practices]
+
+De-emphasize: [skills least relevant — e.g. compliance work, non-technical
+collaboration tasks, manual processes]
+
+Frame [key project name] as: [how to describe this project for this audience —
+e.g. "a scalable data pipeline that handled X events/sec" vs. "a cross-team
+initiative to improve data quality"]
+
+---
+
+## [Role Type 2, e.g. "Engineering Manager / Tech Lead"]
+
+Emphasize: [leadership aspects — team coordination, roadmap ownership, mentoring,
+stakeholder communication, delivery ownership]
+
+De-emphasize: [low-level implementation details that dilute the leadership narrative]
+
+Frame [key project name] as: [e.g. "a multi-team program I drove from problem
+statement through delivery" rather than focusing on specific tools used]
+
+---
+
+## [Role Type 3, e.g. "DevOps / Platform Engineer"]
+
+Emphasize: [automation, infrastructure, reliability, CI/CD, observability, IaC]
+
+De-emphasize: [business process work, compliance, non-platform concerns]
+
+Frame [key project name] as: [e.g. "an internal platform that reduced deployment
+time and gave teams self-service capabilities"]
+
+---
+
+## Metric Guardrail (applies to all roles)
+
+Use numbers only when they exist in your base resume or context files. Do not
+invent figures. Use qualitative descriptors for impact: significantly, measurably,
+noticeably, dramatically, consistently, effectively, reliably.

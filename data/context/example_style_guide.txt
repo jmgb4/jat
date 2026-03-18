@@ -1,0 +1,24 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# SETUP INSTRUCTIONS
+# 1. Copy this file:  cp example_style_guide.txt style_guide.txt
+# 2. Edit the rules to match your preferences. This is intentionally short —
+#    one rule per line. The AI checks this on the final polish pass.
+# ─────────────────────────────────────────────────────────────────────────────
+
+Tone: professional but human — no jargon, no filler, no corporate speak.
+
+Numbers: qualitative impact only unless exact figures exist in the source resume.
+
+Section order: Contact → Summary (only if it adds genuine value, otherwise omit) →
+Technical Skills → Professional Experience → Education.
+
+Headings: bold and underlined for section headers; consistent with base resume layout.
+
+Sentences: short. Break anything over 25 words into two sentences.
+
+Tense: past tense for previous roles; present tense for current role only.
+
+Formatting: no tables, no columns in experience bullets. Plain readable text.
+
+Summary section (if included): 2–3 sentences max. No "results-driven professional"
+or similar openers. Start with your specialty and what you bring.

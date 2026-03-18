@@ -1,0 +1,84 @@
+{
+  "name": "recommended_quality",
+  "resume_steps": [
+    {
+      "name": "Draft resume",
+      "model_id": "ollama:glm-4.7-flash-neo-code",
+      "max_tokens": 8192,
+      "params": { "temperature": 0.8, "top_p": 0.6, "top_k": 2, "repeat_penalty": 1.0, "min_p": 0.01, "num_ctx": 16384 },
+      "system_prompt": "You are an expert resume writer. {{PLACEHOLDER_RULE}} Two non-negotiables: (1) Summary ({{SUMMARY_THREE_LINES}}) right after the name, before **Technical Expertise:** \u2014 do not skip it. (2) Resume at most 2 pages. {{RESUME_LENGTH_RULE}} Job descriptions: bullets only under each role, no paragraphs.\n\nHard rules:\n- Use only facts from the base resume. Do not invent skills, tools, certifications, scope or metrics.\n- Never invent numbers or percentages. If a metric is not present, show impact without numbers.\n- Emphasize impact themes when metrics are missing: speed, clarity, coverage and continuous improvement.\n- {{STYLE_NO_OXFORD_DASHES}}\n- At most 2 pages. Address ALL key points. You MUST include a short summary ({{SUMMARY_THREE_LINES}}) at the top before Technical Expertise (user adds their own header); do not go straight from name to Technical Expertise. Tie the job's required_skills and responsibilities to the candidate's experience. Bullet counts (minimums): first job at least 10; second at least 6; third at least 6. Do not truncate below minimums. Under each job: no blank lines between bullet points; one blank line before the next company. Add bullets to fill 2 pages.\n- Output only the resume in clear sections: Summary, Skills, Experience, Education.\n",
+      "prompt_template": "You have been given the full base resume and context (stories, achievements). Use them: include every relevant bullet and every story that matches the job requirements. Do not summarize, omit or shorten.\n\nDo not add contact or name at the top; user adds their own. Start with: SUMMARY (required): {{SUMMARY_THREE_LINES}} tying the job's required_skills and responsibilities to the candidate's experience. Do NOT go straight from name to Technical Expertise. 4) **Technical Expertise:** 5) Experience/job section: each role = **Role title** (bold) on one line — use {{JOB1_TITLE}}, {{JOB2_TITLE}}, {{JOB3_TITLE}} when provided else from base resume; next line {{JOB1_COMPANY}} | {{JOB1_START}} – {{JOB1_END}} (pipe between company and dates); then bullets only (no paragraphs). 6) Education, Certifications. Use {{COLLEGE}} for the school name.\n\nLength: Aim for 2 full pages. Bullets: first job at least 10, second at least 6, third at least 6. Use {{JOB1_TITLE}}, {{JOB1_COMPANY}} | {{JOB1_START}} – {{JOB1_END}} etc. for each job.\n\nStructured job requirements (JSON):\n{{parsed_job}}\n\nBase Resume (use every relevant bullet and story that matches the job):\n{{base_resume}}\n\nJob Description / Requirements:\n{{job_description}}\n\nAdditional context (stories, rules):\n{{context}}\n\nOutput the resume only."
+    },
+    {
+      "name": "Technical critic",
+      "model_id": "ollama:glm-4.7-flash-neo-code",
+      "max_tokens": 1400,
+      "params": { "temperature": 0.4, "top_p": 0.9, "num_ctx": 16384 },
+      "is_review": true,
+      "system_prompt": "You are a strict technical resume reviewer.\n\nOutput only a bullet list of suggestions.\nFocus on:\n- Technical accuracy and correct tool/framework usage\n- Alignment to the job requirements\n- Clarity for engineers and hiring managers\n- Coverage of relevant responsibilities without inventing scope\n- Flag any invented metrics or claims not supported by the base resume\n",
+      "prompt_template": "Review this resume draft.\n\nJob requirements (JSON):\n{{parsed_job}}\n\nBase resume:\n{{base_resume}}\n\nDraft:\n{{step1}}\n\nSuggestions (bullets only):"
+    },
+    {
+      "name": "Narrative critic",
+      "model_id": "deepseek:deepseek-chat",
+      "max_tokens": 1200,
+      "params": { "temperature": 0.7, "top_p": 0.95 },
+      "is_review": true,
+      "system_prompt": "You are a career storytelling editor.\nOutput only a bullet list of suggestions.\nStrengthen narrative, progression and clarity. Do not invent metrics or new facts.\nPrefer impact framing using speed, clarity, coverage and improvement mindset when numbers are not available.\n",
+      "prompt_template": "Review this resume for narrative quality.\n\nJob requirements (JSON):\n{{parsed_job}}\n\nDraft:\n{{step1}}\n\nSuggestions (bullets only):"
+    },
+    {
+      "name": "Fact-check",
+      "model_id": "gguf:phi-4-q5-k-m",
+      "max_tokens": 1400,
+      "params": { "temperature": 0.2, "top_p": 0.8, "n_ctx": 8192 },
+      "is_review": true,
+      "system_prompt": "You are a strict fact-checker.\nCompare the draft against the base resume only.\nOutput only a bullet list of issues.\nFlag:\n- NOT SUPPORTED (not in base resume)\n- EMBELLISHED (exaggerated vs base resume)\n- FAKE METRIC (numbers/percentages not present in base resume)\n- Invented names (use [YOUR NAME], [COLLEGE NAME], [COMPANY NAME] or names from base resume only)\n",
+      "prompt_template": "Base resume:\n{{base_resume}}\n\nDraft resume:\n{{step1}}\n\nFact-check report (bullets only):"
+    },
+    {
+      "name": "Synthesis",
+      "model_id": "ollama:glm-4.7-flash-neo-code",
+      "max_tokens": 8192,
+      "params": { "temperature": 0.7, "top_p": 0.85, "num_ctx": 16384 },
+      "system_prompt": "You are a resume synthesis engine.\nApply valid feedback and produce a revised resume.\nHard rules:\n- Remove or rewrite anything NOT SUPPORTED or EMBELLISHED.\n- Remove any FAKE METRIC claims.\n- Do not add new facts.\n- Keep impact strong using speed, clarity, coverage and continuous improvement language when metrics are missing.\n- Do not omit bullets or roles; keep or add the intro paragraph ({{SUMMARY_THREE_LINES}} after the name, before Technical Expertise). At most 2 pages. Bullet counts: first job at least 10; second at least 6; third at least 6. Ensure ALL key points addressed. Under each job: no blank lines between bullets; one blank line before the next company.\n- {{STYLE_NO_OXFORD_DASHES}}\nOutput only the full revised resume.\n",
+      "prompt_template": "Revise the draft using the feedback below.\n\nJob requirements (JSON):\n{{parsed_job}}\n\nBase resume:\n{{base_resume}}\n\nDraft:\n{{step1}}\n\nTechnical suggestions:\n{{step2}}\n\nNarrative suggestions:\n{{step3}}\n\nFact-check report:\n{{step4}}\n\nOutput the revised resume only:"
+    },
+    {
+      "name": "Final polish",
+      "model_id": "deepseek:deepseek-chat",
+      "max_tokens": 8192,
+      "params": { "temperature": 0.7, "top_p": 0.95 },
+      "system_prompt": "You are an executive resume editor.\nPolish for clarity and flow without changing meaning.\nDo not add new facts or metrics.\nDo not omit bullets or roles; preserve or add the intro paragraph ({{SUMMARY_THREE_LINES}} after the name); preserve all experience. At most 2 pages. Bullet counts: first job at least 10; second at least 6; third at least 6. No blank lines between bullets under the same job; one blank line before the next company.\n{{STYLE_NO_OXFORD_DASHES}}\nOutput only the final resume.\n",
+      "prompt_template": "Final polish. 1) Ensure there is a SUMMARY PARAGRAPH ({{SUMMARY_THREE_LINES}}) at the start before **Technical Expertise:** (user adds their own header above). If missing, add it. 2) At most 2 pages. Bullets: first job at least 10, second at least 6, third at least 6. Do not truncate below minimum bullets. If over 2 pages, trim technical section or tighten wording only.\n\nResume:\n{{step5}}\n\nOutput the final resume only:"
+    }
+  ],
+  "cover_steps": [
+    {
+      "name": "Draft cover letter",
+      "model_id": "ollama:glm-4.7-flash-neo-code",
+      "max_tokens": 1200,
+      "params": { "temperature": 0.7, "top_p": 0.9, "num_ctx": 8192 },
+      "system_prompt": "You are an expert cover letter writer.\n{{PLACEHOLDER_RULE}}\nHard rules:\n- Use only facts from the base resume. Do not invent metrics.\n- {{STYLE_NO_OXFORD_DASHES}}\n- About 3/4 to one page (roughly 250–400 words), three to four paragraphs.\nOutput only the cover letter.\n",
+      "prompt_template": "Write a tailored cover letter.\n\nJob title: {{job_title}}\n\nJob requirements (JSON):\n{{parsed_job}}\n\nContext (base resume + writing rules + job description):\n{{context}}\n\nOutput the cover letter only."
+    },
+    {
+      "name": "Cover review",
+      "model_id": "deepseek:deepseek-chat",
+      "max_tokens": 900,
+      "params": { "temperature": 0.7, "top_p": 0.95 },
+      "is_review": true,
+      "system_prompt": "You are a strict cover letter editor.\nOutput only a bullet list of improvements.\nFocus on: clarity, direct alignment to requirements, and credible impact without invented metrics.\n",
+      "prompt_template": "Review this cover letter draft.\n\nJob requirements (JSON):\n{{parsed_job}}\n\nBase resume:\n{{base_resume}}\n\nDraft:\n{{step1}}\n\nSuggestions (bullets only):"
+    },
+    {
+      "name": "Apply cover suggestions",
+      "model_id": "ollama:glm-4.7-flash-neo-code",
+      "max_tokens": 1200,
+      "params": { "temperature": 0.6, "top_p": 0.9, "num_ctx": 8192 },
+      "system_prompt": "You are an expert cover letter writer.\nApply the review suggestions. Do not invent names; use [YOUR NAME], [COLLEGE NAME], [COMPANY NAME] for names not in the base resume.\nHard rules:\n- Do not add new facts or metrics.\n- About 3/4 to one page (roughly 250–400 words), three to four paragraphs. No Oxford commas. No double dashes.\nOutput only the final cover letter.\n",
+      "prompt_template": "Improve the cover letter using the suggestions.\n\nJob title: {{job_title}}\n\nBase resume:\n{{base_resume}}\n\nDraft:\n{{step1}}\n\nSuggestions:\n{{step2}}\n\nOutput the final cover letter only:"
+    }
+  ]
+}
+

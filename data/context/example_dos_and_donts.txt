@@ -1,0 +1,41 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# SETUP INSTRUCTIONS
+# 1. Copy this file:  cp example_dos_and_donts.txt dos_and_donts.txt
+# 2. Edit the rules to match your personal writing preferences and the
+#    expectations of the roles you target.
+# 3. This file is loaded on every generation pass. Keep it concise —
+#    one rule per line is easier for the AI to follow than long paragraphs.
+# ─────────────────────────────────────────────────────────────────────────────
+
+## Core Principles
+
+- Show impact, don't just list duties. Every bullet should answer "so what?"
+- Use numbers only when they are accurate and verifiable from your own resume.
+- Write like you're explaining to a smart colleague — not performing for a committee.
+- "We" for team work; always add one clause explaining your specific role within it.
+
+## Hard Rules — Things to Never Do
+
+- No percentages unless the exact figure is in your base resume.
+- No Oxford commas. No double dashes (em dash or nothing).
+- Never start a bullet with: responsible for, tasked with, assisted with, helped with.
+- No generic buzzwords. Replace:
+    "leveraged"  → "used"
+    "utilized"   → "used"
+    "synergy"    → delete
+    "innovative" → delete
+    "results-driven" → delete
+
+## Bullet Structure
+
+- Start every bullet with a strong past-tense action verb.
+- Lead with the outcome when possible: "Reduced X by doing Y" beats "Did Y, reducing X".
+- Keep bullets to 1–2 lines. Break anything longer into two bullets.
+- Name specific tools and systems (e.g. "Terraform" not "infrastructure-as-code tool").
+
+## Quantification Policy
+
+- Include real numbers when available.
+- When no number exists, use qualitative scale words: significantly, measurably,
+  noticeably, dramatically, consistently, effectively, reliably.
+- Never fabricate a figure — it creates risk in interviews.

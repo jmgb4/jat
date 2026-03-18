@@ -1,0 +1,472 @@
+{% extends "base.html" %}
+{% block title %}Result – Job Application Tailor{% endblock %}
+{% block brand_sub %}{{ job_title or "Generating…" }}{% endblock %}
+
+{% block content %}
+    <main>
+        <div id="stats-panel" class="card mb-3 shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span class="d-flex align-items-center flex-wrap gap-2">
+                    <span id="stat-phase" class="badge bg-secondary me-1" style="display:none;"></span>
+                    <span>Live progress — Step <span id="stat-pass">–</span> / <span id="stat-total">–</span></span>
+                    <span class="text-muted small" id="stat-stage" style="min-width:6em;"> </span>
+                </span>
+                <div class="d-flex gap-2 align-items-center">
+                    <button id="stop-btn" class="btn btn-sm btn-danger" onclick="stopJob()">&#9632; Stop</button>
+                </div>
+            </div>
+            <div class="card-body pb-2">
+                <div class="progress mb-2" style="height:10px;" title="Overall pipeline progress">
+                    <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width:0%"></div>
+                </div>
+                <div class="d-flex flex-wrap gap-3 small mb-2 text-body">
+                    <span><strong>Time</strong> <span id="stat-elapsed">–</span><span id="stat-eta-sep"> · </span><span id="stat-eta">–</span></span>
+                </div>
+                <div id="step-tracker" class="d-flex flex-wrap gap-1 mb-2 small" style="min-height:1.6em;"></div>
+                <div class="d-flex flex-wrap gap-3 small mb-1">
+                    <span><strong>Model</strong> <span id="stat-model" class="text-primary" style="min-width:4em;">–</span></span>
+                    <span><strong>Tokens</strong> <span id="stat-tokens" style="min-width:2em;">0</span></span>
+                    <span><strong>Speed</strong> <span id="stat-speed" style="min-width:3em;">–</span> tok/s</span>
+                    <span id="queue-col" style="display:none;"><strong>Queue</strong> <span id="stat-queue">–</span></span>
+                </div>
+                <div class="d-flex flex-wrap gap-3 small mb-2 align-items-center">
+                    <span>
+                        <strong>GPU</strong>
+                        <span id="stat-gpu-util">–</span>%
+                        <span class="text-muted" id="stat-gpu-temp"></span>
+                    </span>
+                    <span class="d-flex align-items-center gap-1">
+                        <strong>VRAM</strong>
+                        <span id="stat-vram-text">–</span>
+                        <div class="progress" style="width:80px;height:8px;" title="VRAM usage">
+                            <div id="vram-bar" class="progress-bar" style="width:0%"></div>
+                        </div>
+                    </span>
+                    <span><strong>CPU</strong> <span id="stat-cpu">–</span>%</span>
+                    <span><strong>RAM</strong> <span id="stat-ram">–</span>%</span>
+                    <span><strong>Proc RSS</strong> <span id="stat-rss">–</span> MB</span>
+                </div>
+                <pre id="log-area" class="log-area mt-1" style="max-height:180px;overflow-y:auto;font-size:0.78rem;background:#1e1e2e;color:#cdd6f4;border-radius:6px;padding:8px;"></pre>
+            </div>
+        </div>
+        <div id="status" class="alert alert-info" style="display:none;"></div>
+        <div id="error" class="alert alert-danger" style="display:none;"></div>
+        <div id="cancelled" class="alert alert-warning" style="display:none;">Job stopped. <a href="/" class="alert-link">Start a new job</a>.</div>
+        <div id="result" style="display:none;">
+            <p class="mb-1 text-muted small">{{ job_title or "Result" }}</p>
+            <section>
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <h3 class="mb-0">Resume</h3>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-outline-secondary" type="button" id="copy-resume-btn">Copy</button>
+                        <a id="dl-resume" href="" class="btn btn-sm btn-outline-secondary" download>Download</a>
+                    </div>
+                </div>
+                <pre id="resume-text"></pre>
+            </section>
+            <section>
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <h3 class="mb-0">Cover letter</h3>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-outline-secondary" type="button" id="copy-cover-btn">Copy</button>
+                        <a id="dl-cover" href="" class="btn btn-sm btn-outline-secondary" download>Download</a>
+                    </div>
+                </div>
+                <pre id="cover-text"></pre>
+            </section>
+            <section>
+                <h3>Artifacts</h3>
+                <ul id="artifacts"></ul>
+            </section>
+        </div>
+        <div id="needs-info" class="card mt-3" style="display:none;">
+            <div class="card-body">
+                <p id="question-text"></p>
+                <form id="answer-form">
+                    <input type="text" id="answer-input" class="form-control mb-2" placeholder="Your answer">
+                    <button type="submit" class="btn btn-primary">Submit</button>
+                </form>
+            </div>
+        </div>
+    </main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    var jobId = '{{ job_id }}';
+    var jobTitle = '{{ (job_title or "") | replace("'", "") | replace('"', '') }}';
+    var resultUrl = '/result/' + jobId;
+    var downloadBase = '/download/' + jobId + '/';
+    var streamUrl = '/stream/' + jobId;
+
+    function makeFilename(suffix) {
+        var year = new Date().getFullYear();
+        var safe = jobTitle.replace(/[^a-zA-Z0-9 ]/g, '').trim().replace(/\s+/g, '_').slice(0, 45);
+        if (!safe) safe = 'result';
+        return safe + '_' + year + '_' + suffix + '.md';
+    }
+
+    var _totalSteps = 0;
+    var _stepStates = {};
+    var _jobStart = Date.now();
+    var _stepStart = {};
+    var _stepSpeeds = [];
+    var _elapsedTimer = null;
+    var _lastPass = 0;
+    var _etaTimer = null;
+
+    function _ts() {
+        var d = new Date();
+        return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+    }
+
+    function _formatLogLine(evt) {
+        var phase = evt.phase || '';
+        var pass = evt.pass;
+        var total = evt.total_steps;
+        var stepName = evt.step_name || '';
+        var stage = evt.stage || '';
+        var log = evt.log || '';
+        var parts = [];
+        if (phase) parts.push(phase);
+        if (pass !== undefined && total !== undefined) parts.push('Step ' + pass + '/' + total);
+        if (stepName) parts.push(stepName);
+        if (stage) parts.push(stage);
+        if (log) parts.push(log);
+        var line = parts.join(' — ') || log || '';
+        if (stage === 'skipped' && log) line = 'Skipped — ' + line;
+        return line;
+    }
+
+    function _appendLog(msg, evt) {
+        var pre = document.getElementById('log-area');
+        if (!pre) return;
+        var newLine = '[' + _ts() + '] ' + msg + '\n';
+        if (evt && evt.stage === 'generating' && evt.pass !== undefined) {
+            var lines = pre.textContent.split('\n');
+            var stepPrefix = 'Step ' + evt.pass + '/';
+            if (lines.length > 0) {
+                var last = lines[lines.length - 1];
+                if (last.indexOf(stepPrefix) !== -1 && (last.indexOf('tokens') !== -1 || last.indexOf('generating') !== -1)) {
+                    lines[lines.length - 1] = newLine.trim();
+                    pre.textContent = lines.join('\n') + '\n';
+                    var nearBottom = (pre.scrollHeight - pre.scrollTop - pre.clientHeight) <= 50;
+                    if (nearBottom) pre.scrollTop = pre.scrollHeight;
+                    return;
+                }
+            }
+        }
+        pre.textContent += newLine;
+        var nearBottom = (pre.scrollHeight - pre.scrollTop - pre.clientHeight) <= 50;
+        if (nearBottom) pre.scrollTop = pre.scrollHeight;
+    }
+
+    function _buildStepTracker(n) {
+        var el = document.getElementById('step-tracker');
+        el.innerHTML = '';
+        for (var i = 1; i <= n; i++) {
+            var chip = document.createElement('span');
+            chip.id = 'step-chip-' + i;
+            chip.className = 'badge bg-secondary';
+            chip.style.cssText = 'font-size:0.7rem;min-width:28px;cursor:default;';
+            chip.title = 'Step ' + i;
+            chip.textContent = i;
+            el.appendChild(chip);
+            _stepStates[i] = 'pending';
+        }
+    }
+
+    function _updateChip(pass, state, model) {
+        var chip = document.getElementById('step-chip-' + pass);
+        if (!chip) return;
+        _stepStates[pass] = state;
+        if (model) chip.title = 'Step ' + pass + ': ' + model;
+        if (state === 'active')    { chip.className = 'badge bg-warning text-dark'; chip.textContent = '↻' + pass; }
+        else if (state === 'done') { chip.className = 'badge bg-success'; chip.textContent = '✓' + pass; }
+        else if (state === 'error') { chip.className = 'badge bg-danger'; chip.textContent = '✗' + pass; }
+        else if (state === 'fallback') { chip.className = 'badge bg-warning text-dark'; chip.textContent = '⚡' + pass; if (model) chip.title += ' (fell back)'; }
+        else if (state === 'skipped') { chip.className = 'badge bg-secondary'; chip.textContent = '–' + pass; chip.title += ' (skipped)'; }
+        else { chip.className = 'badge bg-secondary'; chip.textContent = pass; }
+    }
+
+    function _updateEta(pass) {
+        if (_stepSpeeds.length < 1) return;
+        var avgSpeed = _stepSpeeds.reduce(function(a,b){return a+b;},0) / _stepSpeeds.length;
+        if (avgSpeed <= 0) return;
+        var remaining = (_totalSteps - pass);
+        if (remaining <= 0) return;
+        var etaSec = (remaining * 1500) / avgSpeed;
+        var min = Math.floor(etaSec / 60);
+        var sec = Math.floor(etaSec % 60);
+        var etaText = min > 0 ? ('~' + min + 'm ' + sec + 's left') : ('~' + sec + 's left');
+        document.getElementById('stat-eta').textContent = etaText;
+        var sep = document.getElementById('stat-eta-sep');
+        if (sep) sep.style.visibility = etaText ? 'visible' : 'hidden';
+    }
+
+    function _startElapsedTimer() {
+        if (_elapsedTimer) return;
+        _jobStart = Date.now();
+        _elapsedTimer = setInterval(function() {
+            var sec = Math.floor((Date.now() - _jobStart) / 1000);
+            var m = Math.floor(sec / 60), s = sec % 60;
+            document.getElementById('stat-elapsed').textContent = (m > 0 ? m + 'm ' : '') + s + 's elapsed';
+        }, 1000);
+    }
+
+    function _stopElapsedTimer() {
+        if (_elapsedTimer) { clearInterval(_elapsedTimer); _elapsedTimer = null; }
+    }
+
+    function _stopEtaTimer() {
+        if (_etaTimer) { clearInterval(_etaTimer); _etaTimer = null; }
+    }
+
+    function _updateVram(hw) {
+        if (!hw) return;
+        var used = hw.gpu_mem_used, total = hw.gpu_mem_total;
+        if (used === undefined || total === undefined || total === 0) return;
+        var usedMB = Math.round(used / 1048576);
+        var totalMB = Math.round(total / 1048576);
+        var pct = Math.min(100, Math.round(usedMB / totalMB * 100));
+        document.getElementById('stat-vram-text').textContent = usedMB + ' / ' + totalMB + ' MB (' + pct + '%)';
+        var bar = document.getElementById('vram-bar');
+        bar.style.width = pct + '%';
+        bar.className = 'progress-bar ' + (pct >= 90 ? 'bg-danger' : pct >= 70 ? 'bg-warning' : 'bg-success');
+    }
+
+    var _statsPending = {};
+    var _statsFlushTimer = null;
+    var _STATS_THROTTLE_MS = 120;
+
+    function _flushStats() {
+        _statsFlushTimer = null;
+        var evt = _statsPending;
+        _statsPending = {};
+        if (Object.keys(evt).length === 0) return;
+        _applyStats(evt);
+    }
+
+    function _applyStats(evt) {
+        _startElapsedTimer();
+        if (evt.total_steps !== undefined && evt.total_steps !== _totalSteps) {
+            _totalSteps = evt.total_steps;
+            document.getElementById('stat-total').textContent = _totalSteps;
+            _buildStepTracker(_totalSteps);
+        }
+        if (evt.pass !== undefined) {
+            var p = evt.pass;
+            document.getElementById('stat-pass').textContent = p;
+            var total = _totalSteps || 1;
+            var pct = Math.min(100, Math.max(0, (p / total) * 100));
+            if (evt.stage === 'complete') pct = Math.min(100, ((p) / total) * 100);
+            document.getElementById('progress-bar').style.width = pct + '%';
+        }
+        if (evt.phase !== undefined) {
+            var phaseEl = document.getElementById('stat-phase');
+            phaseEl.textContent = evt.phase;
+            phaseEl.style.display = 'inline';
+            if (evt.phase.toLowerCase().indexOf('cover') !== -1) {
+                document.getElementById('progress-bar').className = 'progress-bar progress-bar-striped progress-bar-animated bg-info';
+            }
+        }
+        if (evt.pass !== undefined) _lastPass = evt.pass;
+        if (evt.stage !== undefined) {
+            document.getElementById('stat-stage').textContent = evt.stage;
+            if (evt.stage === 'starting' && evt.pass !== undefined) {
+                _stepStart[evt.pass] = Date.now();
+                _updateChip(evt.pass, 'active', evt.model);
+            } else if (evt.stage === 'complete' && evt.pass !== undefined) {
+                _updateChip(evt.pass, 'done', evt.model);
+                if (evt.speed && evt.speed > 0) { _stepSpeeds.push(evt.speed); _updateEta(evt.pass); }
+            } else if (evt.stage === 'fallback' && evt.pass !== undefined) {
+                _updateChip(evt.pass, 'error');
+            } else if (evt.stage === 'guardrail' && evt.pass !== undefined) {
+                _updateChip(evt.pass, 'fallback');
+            } else if (evt.stage === 'skipped' && evt.pass !== undefined) {
+                if (evt.log !== undefined) _appendLog(_formatLogLine(evt), evt);
+                _updateChip(evt.pass, 'skipped');
+            }
+        }
+        if (evt.pass !== undefined && _stepSpeeds.length >= 1) _updateEta(evt.pass);
+        if (_totalSteps > 0 && _stepSpeeds.length >= 1 && !_etaTimer) {
+            _etaTimer = setInterval(function() { _updateEta(_lastPass); }, 2000);
+        }
+        if (evt.model !== undefined) document.getElementById('stat-model').textContent = evt.model;
+        if (evt.tokens_generated !== undefined) document.getElementById('stat-tokens').textContent = evt.tokens_generated;
+        if (evt.tokens !== undefined) document.getElementById('stat-tokens').textContent = evt.tokens;
+        if (evt.speed !== undefined) document.getElementById('stat-speed').textContent = evt.speed.toFixed(1);
+        if (evt.elapsed_sec !== undefined && evt.tokens !== undefined && evt.elapsed_sec > 0)
+            document.getElementById('stat-speed').textContent = (evt.tokens / evt.elapsed_sec).toFixed(1);
+        if (evt.log !== undefined) _appendLog(_formatLogLine(evt), evt);
+        if (evt.queue_position !== undefined) {
+            document.getElementById('stat-queue').textContent = evt.queue_position;
+            document.getElementById('queue-col').style.display = 'inline';
+        }
+        if (evt.hardware !== undefined) {
+            var hw = evt.hardware;
+            try {
+                if (hw.cpu_percent !== undefined) document.getElementById('stat-cpu').textContent = hw.cpu_percent.toFixed(0);
+                if (hw.ram_percent !== undefined) document.getElementById('stat-ram').textContent = hw.ram_percent.toFixed(0);
+                if (hw.process_rss_mb !== undefined) document.getElementById('stat-rss').textContent = hw.process_rss_mb.toFixed(0);
+                if (hw.gpu_util !== undefined) document.getElementById('stat-gpu-util').textContent = hw.gpu_util.toFixed(0);
+                if (hw.gpu_temp !== undefined) document.getElementById('stat-gpu-temp').textContent = hw.gpu_temp.toFixed(0) + '°C';
+                _updateVram(hw);
+                if (hw.gpu_mem_used !== undefined && hw.gpu_mem_total !== undefined) {
+                    var vPct = hw.gpu_mem_used / hw.gpu_mem_total * 100;
+                    if (vPct > 92) _appendLog('⚠ VRAM critically full (' + vPct.toFixed(0) + '%) — model may spill to RAM');
+                }
+            } catch (e) {}
+        }
+    }
+
+    function updateStats(evt) {
+        if (evt.stage === 'skipped' && evt.pass !== undefined) {
+            if (evt.log !== undefined) _appendLog(_formatLogLine(evt), evt);
+            _updateChip(evt.pass, 'skipped');
+        }
+        var key;
+        for (key in evt) {
+            if (!evt.hasOwnProperty(key)) continue;
+            if (key === 'log') { _appendLog(_formatLogLine(evt), evt); continue; }
+            _statsPending[key] = evt[key];
+        }
+        if (_statsFlushTimer !== null) return;
+        _statsFlushTimer = setTimeout(_flushStats, _STATS_THROTTLE_MS);
+    }
+
+    function showError(msg) {
+        _stopElapsedTimer();
+        _stopEtaTimer();
+        document.getElementById('stats-panel').style.display = 'none';
+        var el = document.getElementById('error');
+        el.textContent = msg;
+        el.style.display = 'block';
+    }
+
+    function showResult(data) {
+        _stopElapsedTimer();
+        _stopEtaTimer();
+        if (data.job_title) jobTitle = data.job_title.replace(/'/g, '').replace(/"/g, '');
+        document.getElementById('stats-panel').style.display = 'none';
+        document.getElementById('status').style.display = 'none';
+        document.getElementById('result').style.display = 'block';
+        document.getElementById('resume-text').textContent = data.resume || '';
+        document.getElementById('cover-text').textContent = data.cover_letter || '';
+        var resumeName = makeFilename('resume');
+        var coverName  = makeFilename('cover_letter');
+        var dlResume = document.getElementById('dl-resume');
+        dlResume.href = downloadBase + 'resume_final.md';
+        dlResume.setAttribute('download', resumeName);
+        dlResume.textContent = 'Download ' + resumeName;
+        var dlCover = document.getElementById('dl-cover');
+        dlCover.href = downloadBase + 'cover_final.md';
+        dlCover.setAttribute('download', coverName);
+        dlCover.textContent = 'Download ' + coverName;
+        var list = document.getElementById('artifacts');
+        list.innerHTML = '';
+        (data.artifacts || []).forEach(function(name) {
+            var li = document.createElement('li');
+            var a = document.createElement('a');
+            a.href = downloadBase + name;
+            a.textContent = name;
+            a.download = name;
+            a.className = 'text-primary';
+            li.appendChild(a);
+            list.appendChild(li);
+        });
+    }
+
+    function showQuestion(q) {
+        document.getElementById('question-text').textContent = q;
+        document.getElementById('needs-info').style.display = 'block';
+    }
+
+    function showCancelled() {
+        _stopElapsedTimer();
+        _stopEtaTimer();
+        document.getElementById('stats-panel').style.display = 'none';
+        document.getElementById('status').style.display = 'none';
+        document.getElementById('cancelled').style.display = 'block';
+    }
+
+    function stopJob() {
+        var btn = document.getElementById('stop-btn');
+        btn.disabled = true;
+        btn.textContent = 'Stopping…';
+        fetch('/api/jobs/' + jobId + '/cancel', { method: 'POST' })
+            .then(function() {})
+            .catch(function() { showCancelled(); });
+    }
+
+    var es = new EventSource(streamUrl);
+    es.onmessage = function(e) {
+        try {
+            var evt = JSON.parse(e.data);
+            if (evt.ping) return;
+            updateStats(evt);
+            if (evt.status === 'complete' || evt.status === 'error' || evt.status === 'cancelled') {
+                if (_statsFlushTimer) { clearTimeout(_statsFlushTimer); _statsFlushTimer = null; }
+                _flushStats();
+            }
+            if (evt.status === 'complete') {
+                es.close();
+                document.getElementById('stop-btn').style.display = 'none';
+                fetch(resultUrl).then(function(r) { return r.json(); }).then(showResult);
+            } else if (evt.status === 'error') {
+                es.close();
+                document.getElementById('stop-btn').style.display = 'none';
+                showError(evt.message || 'Job failed');
+            } else if (evt.status === 'cancelled') {
+                es.close();
+                showCancelled();
+            }
+        } catch (err) {}
+    };
+    es.onerror = function() {
+        es.close();
+        fetch('/status/' + jobId)
+            .then(function(r) {
+                if (!r.ok && r.status === 404) return { _gone: true };
+                return r.json();
+            })
+            .then(function(s) {
+                if (s && s._gone) {
+                    showError('Session lost (server may have restarted). Start a new job from the home page.');
+                    return;
+                }
+                if (s && s.status === 'complete') fetch(resultUrl).then(function(r) { return r.json(); }).then(showResult);
+                else if (s && s.status === 'error') showError(s.message || 'Job failed');
+                else if (s && s.status === 'cancelled') showCancelled();
+                else setTimeout(function() { es = new EventSource(streamUrl); }, 2000);
+            })
+            .catch(function() {
+                showError('Connection lost. Check that the server is still running (e.g. run .\\run.ps1) and try refreshing the page.');
+            });
+    };
+
+    document.getElementById('answer-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        var answer = document.getElementById('answer-input').value;
+        fetch('/answer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ job_id: jobId, answer: answer }) })
+            .then(function() { document.getElementById('needs-info').style.display = 'none'; });
+    });
+
+    function _copyEl(elId, btn) {
+        var text = document.getElementById(elId).textContent || '';
+        navigator.clipboard.writeText(text).then(function() {
+            var old = btn.textContent; btn.textContent = 'Copied!';
+            setTimeout(function(){ btn.textContent = old; }, 1500);
+        }).catch(function() {
+            var ta = document.createElement('textarea');
+            ta.value = text;
+            document.body.appendChild(ta); ta.select();
+            document.execCommand('copy'); document.body.removeChild(ta);
+            var old = btn.textContent; btn.textContent = 'Copied!';
+            setTimeout(function(){ btn.textContent = old; }, 1500);
+        });
+    }
+    document.getElementById('copy-resume-btn').addEventListener('click', function() { _copyEl('resume-text', this); });
+    document.getElementById('copy-cover-btn').addEventListener('click', function() { _copyEl('cover-text', this); });
+</script>
+{% endblock %}

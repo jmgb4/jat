@@ -1,0 +1,514 @@
+{% extends "base.html" %}
+{% block title %}History – Job Application Tailor{% endblock %}
+{% block brand_sub %}Saved applications{% endblock %}
+{% block nav_history %}active{% endblock %}
+
+{% block extra_head %}
+<style>
+    .hist-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r);
+        box-shadow: var(--s-card);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+    .hist-card-header {
+        background: linear-gradient(92deg, var(--accent) 0%, var(--accent-h) 100%);
+        color: #fff;
+        padding: 0.68rem 1.1rem;
+        font-weight: 700;
+        font-size: 0.92rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        border-bottom: 1px solid rgba(0,0,0,0.14);
+    }
+    .hist-card-body { flex: 1; overflow-y: auto; }
+    .hist-card-footer {
+        border-top: 1px solid var(--border);
+        background: var(--surface2);
+        padding: 0.5rem 0.8rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+    .job-item {
+        border-bottom: 1px solid var(--surface2);
+        padding: 0.58rem 0.8rem;
+        display: flex;
+        align-items: flex-start;
+        gap: 0.6rem;
+        cursor: pointer;
+        transition: background .12s;
+    }
+    .job-item:hover { background: var(--accent-light); }
+    .job-item.selected-job { background: var(--accent-light); border-left: 3px solid var(--accent); }
+    .job-item input[type=checkbox] { margin-top: 3px; flex-shrink: 0; cursor: pointer; width: 15px; height: 15px; }
+    .job-item-text { flex: 1; min-width: 0; }
+    .job-item-title { font-weight: 600; font-size: 0.9rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .job-item-url { font-size: 0.78rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .job-item-meta { font-size: 0.72rem; color: var(--muted); opacity: 0.8; }
+    .btn-toolbar-jat {
+        padding: 0.26rem 0.65rem;
+        border-radius: var(--r-sm);
+        font-size: 0.8rem;
+        font-weight: 500;
+        cursor: pointer;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text-2);
+        transition: all .15s;
+    }
+    .btn-toolbar-jat:hover { border-color: var(--accent-h); color: var(--accent); }
+    .btn-toolbar-danger { border-color: #d0a0a0; color: var(--danger); background: var(--danger-light); }
+    .btn-toolbar-danger:hover { background: #ead8d8; border-color: var(--danger); }
+    .btn-toolbar-danger:disabled { opacity: 0.38; cursor: not-allowed; }
+    .gen-row { cursor: pointer; transition: background .1s; }
+    .gen-row:hover { background: var(--accent-light); }
+    .gen-row.active-gen { background: var(--accent-light); }
+    .content-pre {
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-size: 0.88rem;
+        line-height: 1.55;
+        background: #eceae5;
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: var(--r-sm);
+        padding: 1rem 1.1rem;
+        max-height: 55vh;
+        overflow-y: auto;
+    }
+    .tab-content-pane { display: none; }
+    .tab-content-pane.active { display: block; }
+    #viewer-panel { display: none; }
+    #generations-panel { display: none; }
+    .limit-select {
+        font-size: 0.8rem;
+        padding: 0.2rem 0.5rem;
+        border-radius: var(--r-sm);
+        border: 1px solid var(--border);
+        color: var(--text-2);
+        background: var(--surface);
+        cursor: pointer;
+    }
+    .page-info { font-size: 0.8rem; color: var(--muted); }
+</style>
+{% endblock %}
+
+{% block content %}
+    <div class="row g-3" style="align-items: flex-start;">
+
+        <!-- Left: jobs list -->
+        <div class="col-12 col-lg-4" style="position: sticky; top: 1rem;">
+            <div class="hist-card" style="max-height: 82vh;">
+                <div class="hist-card-header">
+                    <span>Jobs <span id="jobs-count" style="font-weight:400;font-size:0.82rem;opacity:.85;"></span></span>
+                    <div class="d-flex gap-1 flex-wrap">
+                        <button id="select-all-btn" class="btn-toolbar-jat" type="button">Select All</button>
+                        <button id="delete-sel-btn" class="btn-toolbar-danger btn-toolbar-jat" type="button" disabled>Delete Selected</button>
+                        <button id="refresh" class="btn-toolbar-jat" type="button">Refresh</button>
+                    </div>
+                </div>
+                <div class="hist-card-body" id="jobs-list">
+                    <div class="p-3 text-muted">Loading…</div>
+                </div>
+                <div class="hist-card-footer">
+                    <span class="page-info" id="page-info"></span>
+                    <div class="ms-auto d-flex align-items-center gap-2">
+                        <button id="prev-page" class="btn-toolbar-jat" type="button" disabled>← Prev</button>
+                        <select id="limit-select" class="limit-select">
+                            <option value="20">Show 20</option>
+                            <option value="50">Show 50</option>
+                            <option value="100">Show 100</option>
+                            <option value="0">Show all</option>
+                        </select>
+                        <button id="next-page" class="btn-toolbar-jat" type="button" disabled>Next →</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: generations + viewer -->
+        <div class="col-12 col-lg-8">
+            <!-- Generations table -->
+            <div id="generations-panel" class="hist-card mb-3">
+                <div class="hist-card-header">
+                    <div style="min-width:0;">
+                        <div id="gen-job-title" style="font-size:1rem;"></div>
+                        <div id="gen-job-url" style="font-size:0.78rem;font-weight:400;opacity:.85;"></div>
+                    </div>
+                    <button id="oneup-btn" class="btn-toolbar-jat" type="button" style="flex-shrink:0;">One-up ↑</button>
+                </div>
+                <div class="hist-card-body" style="overflow-x:auto;">
+                    <table class="table table-sm mb-0 align-middle" style="font-size:0.88rem;">
+                        <thead>
+                            <tr>
+                                <th style="width:3rem;">Ver</th>
+                                <th>Date</th>
+                                <th>Focus</th>
+                                <th>Models</th>
+                                <th class="text-end" style="width:5rem;">View</th>
+                            </tr>
+                        </thead>
+                        <tbody id="gen-body">
+                            <tr><td colspan="5" class="text-muted p-3">Select a job.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Resume / cover viewer -->
+            <div id="viewer-panel" class="hist-card">
+                <div class="hist-card-header">
+                    <span id="viewer-title" style="font-size:0.92rem;font-weight:600;"></span>
+                    <div class="d-flex gap-2 flex-wrap" style="flex-shrink:0;">
+                        <button class="btn-toolbar-jat" id="copy-resume-btn" type="button">Copy Resume</button>
+                        <button class="btn-toolbar-jat" id="copy-cover-btn" type="button">Copy Cover</button>
+                    </div>
+                </div>
+                <div class="hist-card-body p-2" style="overflow:visible;">
+                    <ul class="nav nav-tabs mb-2 px-1 pt-1" id="viewer-tabs">
+                        <li class="nav-item">
+                            <button class="nav-link active" data-tab="resume">Resume</button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link" data-tab="cover">Cover letter</button>
+                        </li>
+                    </ul>
+                    <div id="tab-resume" class="tab-content-pane active px-1 pb-2">
+                        <pre id="viewer-resume" class="content-pre">–</pre>
+                    </div>
+                    <div id="tab-cover" class="tab-content-pane px-1 pb-2">
+                        <pre id="viewer-cover" class="content-pre">–</pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- One-up form -->
+            <div id="oneup-panel" class="hist-card mt-3" style="display:none;">
+                <div class="hist-card-header">
+                    <span>One-up refinement</span>
+                    <button id="oneup-close" class="btn-toolbar-jat" type="button">Close</button>
+                </div>
+                <div class="p-3">
+                    <div class="mb-2" style="font-size:0.88rem;color:var(--muted);">Describe what to improve. A new generation run will be queued with that focus.</div>
+                    <div class="mb-2">
+                        <label class="form-label" style="font-size:0.88rem;">Focus</label>
+                        <input id="focus" class="form-control" placeholder="e.g., tighten bullets, stronger impact" style="font-size:0.92rem;">
+                    </div>
+                    <button id="oneup-submit" class="btn btn-primary" type="button">Queue one-up</button>
+                    <div id="oneup-msg" style="font-size:0.84rem;color:var(--muted);margin-top:0.5rem;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    function esc(s) {
+        return (s || '').toString()
+            .replaceAll('&','&amp;').replaceAll('<','&lt;')
+            .replaceAll('>','&gt;').replaceAll('"','&quot;')
+            .replaceAll("'","&#39;");
+    }
+    function ts(epoch) {
+        if (!epoch) return '–';
+        return new Date(epoch * 1000).toLocaleString([], {dateStyle:'short', timeStyle:'short'});
+    }
+
+    var _selectedJobKey = null;
+    var _checkedKeys = new Set();
+    var _currentOffset = 0;
+    var _currentLimit = 20;
+    var _totalJobs = 0;
+    var _allJobsInPage = [];
+
+    function updatePaginationUI() {
+        var limit = _currentLimit;
+        var start = _currentOffset + 1;
+        var end = limit > 0 ? Math.min(_currentOffset + limit, _totalJobs) : _totalJobs;
+        document.getElementById('page-info').textContent =
+            _totalJobs === 0 ? '' : (start + '–' + end + ' of ' + _totalJobs);
+        document.getElementById('prev-page').disabled = _currentOffset <= 0;
+        document.getElementById('next-page').disabled = limit <= 0 || (_currentOffset + limit >= _totalJobs);
+    }
+
+    document.getElementById('limit-select').addEventListener('change', function() {
+        _currentLimit = parseInt(this.value) || 0;
+        _currentOffset = 0;
+        _checkedKeys.clear();
+        loadJobs();
+    });
+    document.getElementById('prev-page').addEventListener('click', function() {
+        _currentOffset = Math.max(0, _currentOffset - _currentLimit);
+        _checkedKeys.clear();
+        loadJobs();
+    });
+    document.getElementById('next-page').addEventListener('click', function() {
+        _currentOffset += _currentLimit;
+        _checkedKeys.clear();
+        loadJobs();
+    });
+
+    function updateDeleteBtn() {
+        var btn = document.getElementById('delete-sel-btn');
+        btn.disabled = _checkedKeys.size === 0;
+        btn.textContent = _checkedKeys.size > 0 ? 'Delete (' + _checkedKeys.size + ')' : 'Delete Selected';
+    }
+
+    function updateSelectAllBtn() {
+        var allChecked = _allJobsInPage.length > 0 &&
+            _allJobsInPage.every(function(j){ return _checkedKeys.has(j.job_key); });
+        document.getElementById('select-all-btn').textContent = allChecked ? 'Deselect All' : 'Select All';
+    }
+
+    document.getElementById('select-all-btn').addEventListener('click', function() {
+        var allChecked = _allJobsInPage.length > 0 &&
+            _allJobsInPage.every(function(j){ return _checkedKeys.has(j.job_key); });
+        _allJobsInPage.forEach(function(j) {
+            if (allChecked) _checkedKeys.delete(j.job_key);
+            else _checkedKeys.add(j.job_key);
+        });
+        document.querySelectorAll('.job-cb').forEach(function(cb) {
+            cb.checked = _checkedKeys.has(cb.dataset.key);
+        });
+        updateDeleteBtn();
+        updateSelectAllBtn();
+    });
+
+    document.getElementById('delete-sel-btn').addEventListener('click', async function() {
+        if (_checkedKeys.size === 0) return;
+        var names = _allJobsInPage
+            .filter(function(j){ return _checkedKeys.has(j.job_key); })
+            .map(function(j){ return j.job_title || j.job_key; })
+            .join('\n• ');
+        if (!confirm('Delete ' + _checkedKeys.size + ' job(s)?\n\n• ' + names + '\n\nThis cannot be undone.')) return;
+        var keys = Array.from(_checkedKeys);
+        try {
+            var r = await fetch('/api/history/jobs', {
+                method: 'DELETE',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ job_keys: keys })
+            });
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            _checkedKeys.clear();
+            if (_selectedJobKey && keys.includes(_selectedJobKey)) {
+                _selectedJobKey = null;
+                document.getElementById('generations-panel').style.display = 'none';
+                document.getElementById('viewer-panel').style.display = 'none';
+            }
+            loadJobs();
+        } catch(e) {
+            alert('Delete failed: ' + e.message);
+        }
+    });
+
+    function copyText(text, btn) {
+        navigator.clipboard.writeText(text || '').then(function() {
+            var old = btn.textContent; btn.textContent = 'Copied!';
+            setTimeout(function(){ btn.textContent = old; }, 1500);
+        }).catch(function() {
+            var ta = document.createElement('textarea');
+            ta.value = text || '';
+            document.body.appendChild(ta); ta.select();
+            document.execCommand('copy'); document.body.removeChild(ta);
+            var old = btn.textContent; btn.textContent = 'Copied!';
+            setTimeout(function(){ btn.textContent = old; }, 1500);
+        });
+    }
+    document.getElementById('copy-resume-btn').addEventListener('click', function() {
+        copyText(document.getElementById('viewer-resume').textContent, this);
+    });
+    document.getElementById('copy-cover-btn').addEventListener('click', function() {
+        copyText(document.getElementById('viewer-cover').textContent, this);
+    });
+
+    document.getElementById('viewer-tabs').addEventListener('click', function(e) {
+        var btn = e.target.closest('[data-tab]');
+        if (!btn) return;
+        document.querySelectorAll('#viewer-tabs .nav-link').forEach(function(b){ b.classList.remove('active'); });
+        btn.classList.add('active');
+        document.querySelectorAll('.tab-content-pane').forEach(function(p){ p.classList.remove('active'); });
+        document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    });
+
+    async function loadGenContent(jobKey, version, label) {
+        document.getElementById('viewer-panel').style.display = '';
+        document.getElementById('viewer-title').textContent = 'Loading v' + version + '…';
+        document.getElementById('viewer-resume').textContent = 'Loading…';
+        document.getElementById('viewer-cover').textContent = 'Loading…';
+        try {
+            var r = await fetch('/api/history/' + encodeURIComponent(jobKey) + '/generation/' + version);
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            var data = await r.json();
+            document.getElementById('viewer-title').textContent =
+                (label || '') + ' — v' + version +
+                (data.focus ? ' · focus: ' + data.focus : '') +
+                ' · ' + ts(data.created_at);
+            document.getElementById('viewer-resume').textContent = data.resume_md || '(none)';
+            document.getElementById('viewer-cover').textContent = data.cover_md || '(none)';
+            document.querySelectorAll('#viewer-tabs .nav-link').forEach(function(b){ b.classList.remove('active'); });
+            document.querySelector('#viewer-tabs [data-tab="resume"]').classList.add('active');
+            document.querySelectorAll('.tab-content-pane').forEach(function(p){ p.classList.remove('active'); });
+            document.getElementById('tab-resume').classList.add('active');
+            document.querySelectorAll('.gen-row').forEach(function(r){ r.classList.remove('active-gen'); });
+            document.querySelectorAll('.gen-row[data-version="' + version + '"]').forEach(function(r){ r.classList.add('active-gen'); });
+        } catch(e) {
+            document.getElementById('viewer-title').textContent = 'Error';
+            document.getElementById('viewer-resume').textContent = 'Failed: ' + e.message;
+            document.getElementById('viewer-cover').textContent = '';
+        }
+    }
+
+    async function loadGenerations(jobKey, jobTitle, jobUrl) {
+        _selectedJobKey = jobKey;
+        var panel = document.getElementById('generations-panel');
+        panel.style.display = '';
+        document.getElementById('gen-job-title').textContent = jobTitle || jobKey;
+        var urlEl = document.getElementById('gen-job-url');
+        if (jobUrl) {
+            urlEl.innerHTML = '<a href="' + esc(jobUrl) + '" target="_blank" rel="noopener" style="color:#bfdbfe;">'
+                + esc(jobUrl.replace(/^https?:\/\//, '').slice(0, 80)) + (jobUrl.length > 85 ? '…' : '') + '</a>';
+        } else { urlEl.textContent = ''; }
+
+        var tbody = document.getElementById('gen-body');
+        tbody.innerHTML = '<tr><td colspan="5" class="text-muted p-3">Loading…</td></tr>';
+        try {
+            var r = await fetch('/api/history/' + encodeURIComponent(jobKey) + '/generations');
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            var data = await r.json();
+            var gens = data.generations || [];
+            if (!gens.length) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-muted p-3">No generations yet.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = '';
+            gens.forEach(function(g) {
+                var seq = '';
+                try {
+                    var arr = JSON.parse(g.model_sequence_json || '[]');
+                    if (Array.isArray(arr) && arr.length)
+                        seq = arr.map(function(s){ return (s||'').split(':').pop(); }).join(' → ');
+                } catch(_) {}
+                var tr = document.createElement('tr');
+                tr.className = 'gen-row';
+                tr.dataset.version = g.version;
+                tr.innerHTML =
+                    '<td><span class="badge bg-secondary">' + esc(g.version) + '</span></td>' +
+                    '<td style="font-size:0.85rem;">' + ts(g.created_at) + '</td>' +
+                    '<td style="font-size:0.82rem;color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + esc(g.focus||'') + '">' + esc(g.focus || '–') + '</td>' +
+                    '<td style="font-size:0.78rem;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + esc(seq) + '">' + esc(seq || '–') + '</td>' +
+                    '<td class="text-end"><button class="btn btn-sm btn-outline-primary" type="button" style="font-size:0.8rem;">View</button></td>';
+                tr.querySelector('button').addEventListener('click', function() {
+                    loadGenContent(jobKey, g.version, jobTitle);
+                });
+                tbody.appendChild(tr);
+            });
+            if (gens[0]) loadGenContent(jobKey, gens[0].version, jobTitle);
+        } catch(e) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-danger p-3">Failed: ' + esc(e.message) + '</td></tr>';
+        }
+    }
+
+    async function loadJobs() {
+        var list = document.getElementById('jobs-list');
+        list.innerHTML = '<div class="p-3 text-muted">Loading…</div>';
+        var limit = _currentLimit;
+        var url = '/api/history/jobs?limit=' + limit + '&offset=' + _currentOffset;
+        try {
+            var r = await fetch(url);
+            var data = await r.json();
+            _totalJobs = data.total || 0;
+            var items = data.jobs || [];
+            _allJobsInPage = items;
+            document.getElementById('jobs-count').textContent =
+                _totalJobs > 0 ? '(' + _totalJobs + ' total)' : '';
+            updatePaginationUI();
+            updateDeleteBtn();
+            updateSelectAllBtn();
+            if (!items.length) {
+                list.innerHTML = '<div class="p-3 text-muted small">'
+                    + (_totalJobs === 0 ? 'No history yet. Complete some jobs first.' : 'No jobs on this page.')
+                    + '</div>';
+                return;
+            }
+            list.innerHTML = '';
+            items.forEach(function(j) {
+                var div = document.createElement('div');
+                div.className = 'job-item' + (j.job_key === _selectedJobKey ? ' selected-job' : '');
+                var cb = document.createElement('input');
+                cb.type = 'checkbox'; cb.className = 'job-cb'; cb.dataset.key = j.job_key;
+                cb.checked = _checkedKeys.has(j.job_key);
+                cb.addEventListener('change', function(e) {
+                    e.stopPropagation();
+                    if (cb.checked) _checkedKeys.add(j.job_key);
+                    else _checkedKeys.delete(j.job_key);
+                    updateDeleteBtn(); updateSelectAllBtn();
+                });
+                var text = document.createElement('div');
+                text.className = 'job-item-text';
+                text.innerHTML =
+                    '<div class="job-item-title" title="' + esc(j.job_title || j.job_key) + '">'
+                        + esc(j.job_title || j.job_key) + '</div>' +
+                    '<div class="job-item-url">' + esc((j.url||'').replace(/^https?:\/\//,'').slice(0,60)) + '</div>' +
+                    '<div class="job-item-meta">' + ts(j.created_at)
+                        + (j.latest_version ? ' · v' + j.latest_version : '') + '</div>';
+                text.addEventListener('click', function() {
+                    document.querySelectorAll('.job-item').forEach(function(el){ el.classList.remove('selected-job'); });
+                    div.classList.add('selected-job');
+                    loadGenerations(j.job_key, j.job_title, j.url);
+                });
+                div.appendChild(cb);
+                div.appendChild(text);
+                list.appendChild(div);
+            });
+        } catch(e) {
+            list.innerHTML = '<div class="p-3 text-danger small">Failed to load history.</div>';
+        }
+    }
+
+    document.getElementById('oneup-btn').addEventListener('click', function() {
+        var panel = document.getElementById('oneup-panel');
+        panel.style.display = panel.style.display === 'none' ? '' : 'none';
+    });
+    document.getElementById('oneup-close').addEventListener('click', function() {
+        document.getElementById('oneup-panel').style.display = 'none';
+    });
+    document.getElementById('oneup-submit').addEventListener('click', async function() {
+        var focus = (document.getElementById('focus').value || '').trim();
+        if (!_selectedJobKey) { document.getElementById('oneup-msg').textContent = 'Select a job first.'; return; }
+        if (!focus) { document.getElementById('oneup-msg').textContent = 'Focus is required.'; return; }
+        document.getElementById('oneup-msg').textContent = 'Queueing…';
+        try {
+            var r = await fetch('/api/history/oneup', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ job_key: _selectedJobKey, focus: focus })
+            });
+            var data = await r.json();
+            if (!r.ok) { document.getElementById('oneup-msg').textContent = 'Failed: ' + (data.detail ? JSON.stringify(data.detail) : 'error'); return; }
+            document.getElementById('oneup-msg').textContent = 'Queued ' + data.job_id + '. Open from Status.';
+            document.getElementById('focus').value = '';
+        } catch(e) {
+            document.getElementById('oneup-msg').textContent = 'Error: ' + e.message;
+        }
+    });
+
+    document.getElementById('refresh').addEventListener('click', function() {
+        _currentOffset = 0;
+        _checkedKeys.clear();
+        loadJobs();
+    });
+
+    loadJobs();
+})();
+</script>
+{% endblock %}

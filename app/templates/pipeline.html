@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% block title %}Pipeline – Job Application Tailor{% endblock %}
+{% block brand_sub %}Pipeline editor{% endblock %}
+{% block nav_pipeline %}active{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+{% endblock %}
+
+{% block content %}
+    <div class="card shadow-sm mb-3">
+        <div class="card-body">
+            <div class="row g-2 align-items-end">
+                <div class="col-12 col-md-4">
+                    <label class="form-label">Preset</label>
+                    <select id="preset" class="form-select"></select>
+                </div>
+                <div class="col-12 col-md-4">
+                    <label class="form-label">New preset name</label>
+                    <input id="new-name" class="form-control" placeholder="recommended_4pass">
+                </div>
+                <div class="col-12 col-md-4 d-flex gap-2">
+                    <button id="load" class="btn btn-outline-secondary w-100" type="button">Load</button>
+                    <button id="save" class="btn btn-primary w-100" type="button">Save</button>
+                </div>
+            </div>
+            <div id="msg" class="small text-muted mt-2"></div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-12 col-lg-6">
+            <div class="card shadow-sm">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>Resume steps</span>
+                    <button class="btn btn-sm btn-outline-primary" type="button" id="add-resume">Add step</button>
+                </div>
+                <div class="card-body">
+                    <div id="resume-steps" class="vstack gap-2"></div>
+                    <div class="small text-muted mt-2">Drag steps to reorder.</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-6">
+            <div class="card shadow-sm">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>Cover steps</span>
+                    <button class="btn btn-sm btn-outline-primary" type="button" id="add-cover">Add step</button>
+                </div>
+                <div class="card-body">
+                    <div id="cover-steps" class="vstack gap-2"></div>
+                    <div class="small text-muted mt-2">Drag steps to reorder.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <template id="step-tpl">
+        <div class="card border" data-step>
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div class="fw-semibold" data-step-title>Step</div>
+                    <button class="btn btn-sm btn-outline-danger" type="button" data-remove>Remove</button>
+                </div>
+                <div class="row g-2">
+                    <div class="col-12 col-md-6">
+                        <label class="form-label small">Name</label>
+                        <input class="form-control form-control-sm" data-name placeholder="Draft">
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label small">Model</label>
+                        <select class="form-select form-select-sm" data-model></select>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label small">Max tokens</label>
+                        <input class="form-control form-control-sm" data-max-tokens placeholder="4000">
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label small">Params (JSON)</label>
+                        <input class="form-control form-control-sm" data-params placeholder='{"temperature":0.7}'>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small">System prompt</label>
+                        <textarea class="form-control form-control-sm" rows="4" data-system></textarea>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small">Prompt template</label>
+                        <textarea class="form-control form-control-sm" rows="5" data-template></textarea>
+                        <div class="form-text">
+                            Variables: <code>{{context}}</code>, <code>{{base_resume}}</code>, <code>{{job_description}}</code>,
+                            <code>{{step1}}</code>, <code>{{step2}}</code>, <code>{{input}}</code>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    var models = [];
+    function setMsg(t) { document.getElementById('msg').textContent = t || ''; }
+
+    function esc(s) {
+        return (s || '').toString()
+            .replaceAll('&','&amp;').replaceAll('<','&lt;')
+            .replaceAll('>','&gt;').replaceAll('"','&quot;')
+            .replaceAll("'","&#39;");
+    }
+
+    function fillModelSelect(sel, value) {
+        sel.innerHTML = '';
+        (models || []).forEach(function(m) {
+            var opt = document.createElement('option');
+            opt.value = m.id;
+            opt.textContent = (m.source_icon ? (m.source_icon + ' ') : '') + (m.display_name || m.id);
+            sel.appendChild(opt);
+        });
+        if (value) sel.value = value;
+    }
+
+    function addStep(container, data) {
+        var tpl = document.getElementById('step-tpl');
+        var node = tpl.content.firstElementChild.cloneNode(true);
+        node.querySelector('[data-name]').value = (data && data.name) || '';
+        fillModelSelect(node.querySelector('[data-model]'), (data && data.model_id) || '');
+        node.querySelector('[data-max-tokens]').value = (data && data.max_tokens != null) ? String(data.max_tokens) : '';
+        node.querySelector('[data-system]').value = (data && data.system_prompt) || '';
+        node.querySelector('[data-template]').value = (data && data.prompt_template) || '{{input}}';
+        node.querySelector('[data-params]').value = (data && data.params) ? JSON.stringify(data.params) : '';
+        node.querySelector('[data-remove]').addEventListener('click', function(){ node.remove(); });
+        container.appendChild(node);
+    }
+
+    function readSteps(container) {
+        var out = [];
+        container.querySelectorAll('[data-step]').forEach(function(node) {
+            var name = (node.querySelector('[data-name]').value || '').trim();
+            var modelId = (node.querySelector('[data-model]').value || '').trim();
+            var maxTokensRaw = (node.querySelector('[data-max-tokens]').value || '').trim();
+            var systemPrompt = node.querySelector('[data-system]').value || '';
+            var tmpl = node.querySelector('[data-template]').value || '{{input}}';
+            var paramsRaw = (node.querySelector('[data-params]').value || '').trim();
+            var params = {};
+            if (paramsRaw) { try { params = JSON.parse(paramsRaw); } catch(e) {} }
+            var maxTokens = null;
+            if (maxTokensRaw) { var v = parseInt(maxTokensRaw, 10); if (!isNaN(v)) maxTokens = v; }
+            if (!modelId) return;
+            out.push({ name: name || 'Step', model_id: modelId, system_prompt: systemPrompt, prompt_template: tmpl, max_tokens: maxTokens, params: params });
+        });
+        return out;
+    }
+
+    async function loadModels() {
+        var r = await fetch('/api/models/installed');
+        var data = await r.json();
+        models = data.models || [];
+    }
+
+    async function loadPresets() {
+        var sel = document.getElementById('preset');
+        sel.innerHTML = '';
+        var r = await fetch('/api/pipelines');
+        var data = await r.json();
+        (data.pipelines || []).forEach(function(n) {
+            var opt = document.createElement('option');
+            opt.value = n; opt.textContent = n;
+            sel.appendChild(opt);
+        });
+    }
+
+    async function loadPreset(name) {
+        if (!name) return;
+        var r = await fetch('/api/pipelines/' + encodeURIComponent(name));
+        if (!r.ok) { setMsg('Failed to load preset.'); return; }
+        var data = await r.json();
+        var rbox = document.getElementById('resume-steps');
+        var cbox = document.getElementById('cover-steps');
+        rbox.innerHTML = ''; cbox.innerHTML = '';
+        (data.resume_steps || []).forEach(function(s){ addStep(rbox, s); });
+        (data.cover_steps || []).forEach(function(s){ addStep(cbox, s); });
+        setMsg('Loaded ' + name);
+    }
+
+    async function savePreset(name) {
+        if (!name) { setMsg('Preset name required.'); return; }
+        var payload = {
+            name: name,
+            resume_steps: readSteps(document.getElementById('resume-steps')),
+            cover_steps: readSteps(document.getElementById('cover-steps'))
+        };
+        var r = await fetch('/api/pipelines/' + encodeURIComponent(name), {
+            method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)
+        });
+        if (!r.ok) { setMsg('Save failed.'); return; }
+        setMsg('Saved ' + name);
+        await loadPresets();
+    }
+
+    (async function() {
+        await loadModels();
+        await loadPresets();
+        Sortable.create(document.getElementById('resume-steps'), { animation: 120 });
+        Sortable.create(document.getElementById('cover-steps'), { animation: 120 });
+        document.getElementById('add-resume').addEventListener('click', function() { addStep(document.getElementById('resume-steps'), {}); });
+        document.getElementById('add-cover').addEventListener('click', function() { addStep(document.getElementById('cover-steps'), {}); });
+        document.getElementById('load').addEventListener('click', function() { loadPreset(document.getElementById('preset').value); });
+        document.getElementById('save').addEventListener('click', function() {
+            var n = (document.getElementById('new-name').value || '').trim() || document.getElementById('preset').value;
+            savePreset(n);
+        });
+        var sel = document.getElementById('preset');
+        if (sel.options.length) { await loadPreset(sel.value); }
+        else { addStep(document.getElementById('resume-steps'), {}); addStep(document.getElementById('cover-steps'), {}); }
+    })();
+</script>
+{% endblock %}

@@ -1,0 +1,44 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# SETUP INSTRUCTIONS
+# 1. Copy this file:  cp example_achievements.txt achievements.txt
+# 2. Replace the placeholder bullets with your real accomplishments.
+# 3. Use multiple framings of the same achievement — the AI picks the framing
+#    that best fits the target job description (technical vs. leadership vs.
+#    cross-functional). Keep numbers only if they are real and verifiable.
+# ─────────────────────────────────────────────────────────────────────────────
+
+## Technical / Engineering Framing
+
+- [Strong past-tense verb] [what you built or automated] using [tools/languages],
+  resulting in [concrete outcome — time saved, reliability gained, coverage improved].
+
+- [Strong past-tense verb] [system, pipeline, or integration], enabling [team or org]
+  to [do something they could not do before or do significantly faster].
+
+- [Strong past-tense verb] [process, standard, or framework], reducing [pain point]
+  for [number or type of teams/users].
+
+Examples of strong verbs: Built, Automated, Reduced, Eliminated, Designed, Engineered,
+Integrated, Deployed, Migrated, Refactored, Established, Piloted, Implemented.
+
+## Cross-Functional / Collaboration Framing
+
+- Partnered with [team A] and [team B] to [shared objective], translating stakeholder
+  requirements into [deliverable — a process, system, or policy].
+
+- Acted as primary liaison between [team A] and [team B], ensuring [outcome —
+  alignment, consistent data, faster handoffs, etc.].
+
+- Gathered requirements from [number] teams and translated them into [design/spec/API
+  standard], increasing adoption and reducing friction.
+
+## Leadership / Impact Framing
+
+- Led a [duration] initiative to [high-level goal], collaborating with [number or
+  type of stakeholders] and delivering [outcome].
+
+- Owned end-to-end delivery of [project or system], from requirements gathering
+  through deployment and stakeholder sign-off.
+
+- Drove adoption of [practice, tool, or process] across [team/org], resulting in
+  [measurable or qualitative improvement].

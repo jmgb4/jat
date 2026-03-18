@@ -1,0 +1,34 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# SETUP INSTRUCTIONS
+# 1. Copy this file:  cp example_story.txt story.txt
+# 2. Replace EVERY placeholder below with your real career narrative.
+# 3. Write in first person. Focus on 2–5 flagship projects with specific tools,
+#    scope, and outcomes. The AI reads this file on every generation pass.
+# ─────────────────────────────────────────────────────────────────────────────
+
+I work in [your field, e.g. "cybersecurity", "software engineering", "data engineering"]
+with a focus on [your core specialty]. I value [what drives you — measurable impact,
+clean systems, cross-team collaboration, etc.].
+
+## [Project Name] ([approximate duration, e.g. "2 years"])
+
+[Describe the problem that existed before you acted. Then explain what you built,
+changed, or led. Be specific: name the tools, teams involved, and scale of the work.
+2–4 paragraphs. The AI uses this to write accurate, grounded bullet points.]
+
+Example structure:
+  - The problem: "[What was broken, slow, or missing]"
+  - What you did: "[The system/process/integration you built or changed]"
+  - How you did it: "[Tools, APIs, frameworks, collaborators involved]"
+  - The outcome: "[What improved — speed, reliability, team adoption, compliance, etc.]"
+
+## [Project Name 2]
+
+[Repeat for 1–3 more key projects from your career. Each project should represent
+a distinct skill area or achievement. Aim for 150–300 words per project.]
+
+## [Project Name 3] (optional)
+
+[Add a third project if it showcases a meaningfully different skill set — e.g. a
+leadership/process project if the others are technical, or a compliance win if the
+others are engineering-focused.]
