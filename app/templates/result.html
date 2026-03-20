@@ -51,6 +51,15 @@
         </div>
         <div id="status" class="alert alert-info" style="display:none;"></div>
         <div id="error" class="alert alert-danger" style="display:none;"></div>
+        <div id="paste-fallback" style="display:none;" class="card border-secondary mt-2 p-3">
+            <p class="mb-1 fw-semibold">Could not extract the job description automatically.</p>
+            <p class="mb-2 small text-muted">Some sites (Workday, iCIMS, Taleo, etc.) block scraping. Paste the full job description below and click <strong>Retry</strong> to continue.</p>
+            <textarea id="paste-desc" rows="12" class="form-control mb-2 font-monospace" style="font-size:0.82rem;" placeholder="Paste the complete job description here..."></textarea>
+            <div class="d-flex align-items-center gap-2">
+                <button class="btn btn-primary btn-sm" onclick="retryWithPaste()">Retry with pasted description</button>
+                <span id="paste-retry-msg" class="small text-muted"></span>
+            </div>
+        </div>
         <div id="cancelled" class="alert alert-warning" style="display:none;">Job stopped. <a href="/" class="alert-link">Start a new job</a>.</div>
         <div id="result" style="display:none;">
             <p class="mb-1 text-muted small">{{ job_title or "Result" }}</p>
@@ -95,6 +104,7 @@
 <script>
     var jobId = '{{ job_id }}';
     var jobTitle = '{{ (job_title or "") | replace("'", "") | replace('"', '') }}';
+    var jobUrl = '{{ job_url | replace("'", "%27") }}';
     var resultUrl = '/result/' + jobId;
     var downloadBase = '/download/' + jobId + '/';
     var streamUrl = '/stream/' + jobId;
@@ -342,6 +352,59 @@
         var el = document.getElementById('error');
         el.textContent = msg;
         el.style.display = 'block';
+        // Show paste fallback when the description could not be scraped
+        if (msg && (msg.toLowerCase().indexOf('too short') !== -1 || msg.toLowerCase().indexOf('missing') !== -1)) {
+            document.getElementById('paste-fallback').style.display = 'block';
+        }
+    }
+
+    async function retryWithPaste() {
+        var text = (document.getElementById('paste-desc').value || '').trim();
+        if (!text) {
+            document.getElementById('paste-retry-msg').textContent = 'Please paste the job description first.';
+            return;
+        }
+        var msgEl = document.getElementById('paste-retry-msg');
+        msgEl.textContent = 'Submitting…';
+
+        var seqIds = null;
+        var seqFlags = null;
+        try {
+            var saved = localStorage.getItem('jat_sequence_v3');
+            if (saved) {
+                var parsed = JSON.parse(saved);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    seqIds  = parsed.map(function(s) { return s.id || s; });
+                    seqFlags = parsed.map(function(s) { return !!(s.parallel); });
+                }
+            }
+        } catch(e) {}
+
+        try {
+            var r = await fetch('/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    url: jobUrl,
+                    job_description_override: text,
+                    model_sequence: seqIds,
+                    parallel_flags: seqFlags
+                })
+            });
+            if (!r.ok) {
+                var err = await r.json().catch(function() { return {}; });
+                msgEl.textContent = 'Error: ' + (err.detail || r.statusText);
+                return;
+            }
+            var data = await r.json();
+            if (data.job_id) {
+                window.location.href = '/job/' + data.job_id;
+            } else {
+                msgEl.textContent = 'Unexpected response from server.';
+            }
+        } catch(e) {
+            msgEl.textContent = 'Request failed: ' + e.message;
+        }
     }
 
     function showResult(data) {

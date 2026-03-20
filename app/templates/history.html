@@ -4,485 +4,925 @@
 {% block nav_history %}active{% endblock %}
 
 {% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
+    /* ------------------------------------------------------------------ */
+    /* Card shell                                                          */
+    /* ------------------------------------------------------------------ */
     .hist-card {
         background: var(--surface);
         border: 1px solid var(--border);
         border-radius: var(--r);
         box-shadow: var(--s-card);
-        overflow: hidden;
         display: flex;
         flex-direction: column;
+        overflow: hidden;
     }
     .hist-card-header {
         background: linear-gradient(92deg, var(--accent) 0%, var(--accent-h) 100%);
         color: #fff;
-        padding: 0.68rem 1.1rem;
+        padding: 0.6rem 0.9rem;
         font-weight: 700;
-        font-size: 0.92rem;
+        font-size: 0.88rem;
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 0.5rem;
+        gap: 0.4rem;
         flex-wrap: wrap;
         border-bottom: 1px solid rgba(0,0,0,0.14);
+        min-height: 2.6rem;
     }
     .hist-card-body { flex: 1; overflow-y: auto; }
     .hist-card-footer {
         border-top: 1px solid var(--border);
         background: var(--surface2);
-        padding: 0.5rem 0.8rem;
+        padding: 0.45rem 0.75rem;
         display: flex;
         align-items: center;
-        gap: 0.5rem;
+        gap: 0.4rem;
         flex-wrap: wrap;
     }
+
+    /* ------------------------------------------------------------------ */
+    /* Job list items                                                      */
+    /* ------------------------------------------------------------------ */
     .job-item {
         border-bottom: 1px solid var(--surface2);
-        padding: 0.58rem 0.8rem;
-        display: flex;
-        align-items: flex-start;
-        gap: 0.6rem;
+        padding: 0.5rem 0.85rem;
         cursor: pointer;
         transition: background .12s;
     }
     .job-item:hover { background: var(--accent-light); }
-    .job-item.selected-job { background: var(--accent-light); border-left: 3px solid var(--accent); }
-    .job-item input[type=checkbox] { margin-top: 3px; flex-shrink: 0; cursor: pointer; width: 15px; height: 15px; }
-    .job-item-text { flex: 1; min-width: 0; }
-    .job-item-title { font-weight: 600; font-size: 0.9rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .job-item-url { font-size: 0.78rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .job-item-meta { font-size: 0.72rem; color: var(--muted); opacity: 0.8; }
-    .btn-toolbar-jat {
-        padding: 0.26rem 0.65rem;
+    .job-item.selected-job {
+        background: var(--accent-light);
+        border-left: 3px solid var(--accent);
+        padding-left: calc(0.85rem - 3px);
+    }
+    .job-item-title {
+        font-weight: 600;
+        font-size: 0.88rem;
+        color: var(--text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .job-item-url {
+        font-size: 0.76rem;
+        color: var(--muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .job-item-meta { font-size: 0.7rem; color: var(--muted); opacity: 0.8; }
+
+    /* ------------------------------------------------------------------ */
+    /* Toolbar buttons (white-on-accent inside headers)                   */
+    /* ------------------------------------------------------------------ */
+    .btn-hdr {
+        padding: 0.22rem 0.55rem;
         border-radius: var(--r-sm);
-        font-size: 0.8rem;
+        font-size: 0.75rem;
         font-weight: 500;
         cursor: pointer;
-        border: 1px solid var(--border);
-        background: var(--surface);
-        color: var(--text-2);
-        transition: all .15s;
+        border: 1px solid rgba(255,255,255,.35);
+        background: rgba(255,255,255,.13);
+        color: #fff;
+        transition: background .15s;
+        white-space: nowrap;
     }
-    .btn-toolbar-jat:hover { border-color: var(--accent-h); color: var(--accent); }
-    .btn-toolbar-danger { border-color: #d0a0a0; color: var(--danger); background: var(--danger-light); }
-    .btn-toolbar-danger:hover { background: #ead8d8; border-color: var(--danger); }
-    .btn-toolbar-danger:disabled { opacity: 0.38; cursor: not-allowed; }
-    .gen-row { cursor: pointer; transition: background .1s; }
-    .gen-row:hover { background: var(--accent-light); }
-    .gen-row.active-gen { background: var(--accent-light); }
-    .content-pre {
-        white-space: pre-wrap;
-        word-break: break-word;
-        font-size: 0.88rem;
-        line-height: 1.55;
+    .btn-hdr:hover:not(:disabled) { background: rgba(255,255,255,.25); }
+    .btn-hdr:disabled { opacity: 0.35; cursor: not-allowed; }
+    .btn-hdr-danger { border-color: #f4a0a0; background: rgba(200,60,60,.25); }
+    .btn-hdr-danger:hover:not(:disabled) { background: rgba(200,60,60,.45); }
+    .btn-hdr-accent { border-color: #fff; background: rgba(255,255,255,.22); font-weight: 700; }
+    .btn-hdr-accent:hover:not(:disabled) { background: rgba(255,255,255,.38); }
+
+    /* ------------------------------------------------------------------ */
+    /* Rendered markdown content                                          */
+    /* ------------------------------------------------------------------ */
+    .content-md {
+        font-size: 0.84rem;
+        line-height: 1.6;
         background: #eceae5;
         color: var(--text);
-        border: 1px solid var(--border);
-        border-radius: var(--r-sm);
-        padding: 1rem 1.1rem;
-        max-height: 55vh;
+        padding: 0.85rem 1rem;
+        margin: 0;
+        flex: 1;
+        min-height: 0;
         overflow-y: auto;
     }
-    .tab-content-pane { display: none; }
-    .tab-content-pane.active { display: block; }
-    #viewer-panel { display: none; }
-    #generations-panel { display: none; }
-    .limit-select {
+    .content-md h1, .content-md h2, .content-md h3, .content-md h4 {
+        margin: 1rem 0 0.4rem;
+        font-weight: 700;
+        line-height: 1.3;
+        color: var(--text);
+    }
+    .content-md h1 { font-size: 1.15rem; border-bottom: 1px solid var(--border); padding-bottom: 0.25rem; }
+    .content-md h2 { font-size: 1.05rem; }
+    .content-md h3 { font-size: 0.96rem; }
+    .content-md h4 { font-size: 0.9rem; }
+    .content-md p  { margin: 0.45rem 0; }
+    .content-md ul, .content-md ol { padding-left: 1.4rem; margin: 0.35rem 0; }
+    .content-md li { margin: 0.15rem 0; }
+    .content-md strong { font-weight: 700; }
+    .content-md em { font-style: italic; }
+    .content-md code {
+        background: rgba(0,0,0,0.07);
+        border-radius: 3px;
+        padding: 0.1em 0.35em;
+        font-size: 0.9em;
+        font-family: monospace;
+    }
+    .content-md pre {
+        background: rgba(0,0,0,0.07);
+        border-radius: 4px;
+        padding: 0.6rem 0.8rem;
+        overflow-x: auto;
+        font-size: 0.82rem;
+        margin: 0.5rem 0;
+    }
+    .content-md pre code { background: none; padding: 0; }
+    .content-md hr { border: none; border-top: 1px solid var(--border); margin: 0.75rem 0; }
+    .content-md blockquote {
+        border-left: 3px solid var(--accent);
+        margin: 0.5rem 0;
+        padding: 0.25rem 0.75rem;
+        color: var(--text-2);
+    }
+    .content-md table { border-collapse: collapse; width: 100%; font-size: 0.82rem; margin: 0.5rem 0; }
+    .content-md th, .content-md td { border: 1px solid var(--border); padding: 0.3rem 0.55rem; text-align: left; }
+    .content-md th { background: rgba(0,0,0,0.05); font-weight: 600; }
+    .content-md a { color: var(--accent); }
+    .content-placeholder {
+        font-size: 0.88rem;
+        color: var(--muted);
+        text-align: center;
+        padding: 3rem 1rem;
+        font-style: italic;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Column heights — make all four columns the same viewport height   */
+    /* ------------------------------------------------------------------ */
+    .col-panel {
+        display: flex;
+        flex-direction: column;
+    }
+    .col-panel .hist-card {
+        height: 82vh;
+    }
+    .col-panel .hist-card-body {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Interview prep panel (permanent 4th column)                        */
+    /* ------------------------------------------------------------------ */
+    .prep-select {
+        font-size: 0.75rem;
+        padding: 0.2rem 0.45rem;
+        border-radius: var(--r-sm);
+        border: 1px solid rgba(255,255,255,.35);
+        color: #fff;
+        background: rgba(255,255,255,.13);
+        cursor: pointer;
+        max-width: 150px;
+    }
+    .prep-select option { background: var(--surface); color: var(--text); }
+    /* prep viewer shares content-md styling — no separate rule needed */
+    /* 2-step progress indicator */
+    #prep-progress {
+        padding: 0.7rem 1rem 0;
+        display: none;
+    }
+    .prep-step {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
         font-size: 0.8rem;
-        padding: 0.2rem 0.5rem;
+        padding: 0.3rem 0;
+        color: var(--muted);
+    }
+    .prep-step.active { color: var(--accent); }
+    .prep-step.done   { color: var(--success, #22c55e); }
+    .prep-step-dot { font-size: 0.9rem; }
+    .prep-step-label { flex: 1; }
+    .prep-step-spin {
+        display: inline-block;
+        width: 12px; height: 12px;
+        border: 2px solid currentColor;
+        border-top-color: transparent;
+        border-radius: 50%;
+        animation: ps 0.7s linear infinite;
+    }
+    @keyframes ps { to { transform: rotate(360deg); } }
+    /* PII redaction badge */
+    .pii-badge {
+        font-size: 0.68rem;
+        background: rgba(255,255,255,.18);
+        border: 1px solid rgba(255,255,255,.3);
+        border-radius: 99px;
+        padding: 0.1rem 0.45rem;
+        color: #fff;
+        opacity: 0.85;
+        white-space: nowrap;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Version + action selects in jobs header                            */
+    /* ------------------------------------------------------------------ */
+    .gen-version-select {
+        font-size: 0.74rem;
+        padding: 0.18rem 0.4rem;
+        border-radius: var(--r-sm);
+        border: 1px solid rgba(255,255,255,.35);
+        color: #fff;
+        background: rgba(255,255,255,.13);
+        cursor: pointer;
+        max-width: 140px;
+    }
+    .gen-version-select option { background: var(--surface); color: var(--text); }
+    .gen-version-select:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    /* ------------------------------------------------------------------ */
+    /* Pagination                                                          */
+    /* ------------------------------------------------------------------ */
+    .limit-select {
+        font-size: 0.78rem;
+        padding: 0.2rem 0.45rem;
         border-radius: var(--r-sm);
         border: 1px solid var(--border);
         color: var(--text-2);
         background: var(--surface);
         cursor: pointer;
     }
-    .page-info { font-size: 0.8rem; color: var(--muted); }
+    .page-info { font-size: 0.78rem; color: var(--muted); }
+
+    /* ------------------------------------------------------------------ */
+    /* One-up collapsible                                                  */
+    /* ------------------------------------------------------------------ */
+    #oneup-panel { display: none; }
 </style>
 {% endblock %}
 
 {% block content %}
-    <div class="row g-3" style="align-items: flex-start;">
+<!-- ====================================================================
+     Main four-column row
+===================================================================== -->
+<div class="row g-2 align-items-start mb-2">
 
-        <!-- Left: jobs list -->
-        <div class="col-12 col-lg-4" style="position: sticky; top: 1rem;">
-            <div class="hist-card" style="max-height: 82vh;">
-                <div class="hist-card-header">
-                    <span>Jobs <span id="jobs-count" style="font-weight:400;font-size:0.82rem;opacity:.85;"></span></span>
-                    <div class="d-flex gap-1 flex-wrap">
-                        <button id="select-all-btn" class="btn-toolbar-jat" type="button">Select All</button>
-                        <button id="delete-sel-btn" class="btn-toolbar-danger btn-toolbar-jat" type="button" disabled>Delete Selected</button>
-                        <button id="refresh" class="btn-toolbar-jat" type="button">Refresh</button>
-                    </div>
-                </div>
-                <div class="hist-card-body" id="jobs-list">
-                    <div class="p-3 text-muted">Loading…</div>
-                </div>
-                <div class="hist-card-footer">
-                    <span class="page-info" id="page-info"></span>
-                    <div class="ms-auto d-flex align-items-center gap-2">
-                        <button id="prev-page" class="btn-toolbar-jat" type="button" disabled>← Prev</button>
-                        <select id="limit-select" class="limit-select">
-                            <option value="20">Show 20</option>
-                            <option value="50">Show 50</option>
-                            <option value="100">Show 100</option>
-                            <option value="0">Show all</option>
-                        </select>
-                        <button id="next-page" class="btn-toolbar-jat" type="button" disabled>Next →</button>
-                    </div>
+    <!-- ================================================================
+         COL 1 — Jobs list
+    ================================================================ -->
+    <div class="col-12 col-lg-3 col-panel">
+        <div class="hist-card">
+            <!-- Header: title + all job-level actions -->
+            <div class="hist-card-header" style="gap:0.3rem;">
+                <span style="white-space:nowrap;">Jobs <span id="jobs-count" style="font-weight:400;opacity:.8;font-size:0.78rem;"></span></span>
+                <div class="d-flex align-items-center gap-1 flex-wrap ms-auto">
+                    <select id="gen-version-select" class="gen-version-select" disabled title="Generation version">
+                        <option value="">– ver –</option>
+                    </select>
+                    <button id="oneup-btn" class="btn-hdr" type="button" disabled>One-up ↑</button>
+                    <button id="delete-btn" class="btn-hdr btn-hdr-danger" type="button" disabled>Delete</button>
+                    <button id="refresh" class="btn-hdr" type="button">↺</button>
+                    <button id="interview-prep-btn" class="btn-hdr btn-hdr-accent" type="button" disabled>Prep ▶</button>
                 </div>
             </div>
-        </div>
-
-        <!-- Right: generations + viewer -->
-        <div class="col-12 col-lg-8">
-            <!-- Generations table -->
-            <div id="generations-panel" class="hist-card mb-3">
-                <div class="hist-card-header">
-                    <div style="min-width:0;">
-                        <div id="gen-job-title" style="font-size:1rem;"></div>
-                        <div id="gen-job-url" style="font-size:0.78rem;font-weight:400;opacity:.85;"></div>
-                    </div>
-                    <button id="oneup-btn" class="btn-toolbar-jat" type="button" style="flex-shrink:0;">One-up ↑</button>
-                </div>
-                <div class="hist-card-body" style="overflow-x:auto;">
-                    <table class="table table-sm mb-0 align-middle" style="font-size:0.88rem;">
-                        <thead>
-                            <tr>
-                                <th style="width:3rem;">Ver</th>
-                                <th>Date</th>
-                                <th>Focus</th>
-                                <th>Models</th>
-                                <th class="text-end" style="width:5rem;">View</th>
-                            </tr>
-                        </thead>
-                        <tbody id="gen-body">
-                            <tr><td colspan="5" class="text-muted p-3">Select a job.</td></tr>
-                        </tbody>
-                    </table>
-                </div>
+            <!-- Job items -->
+            <div class="hist-card-body" id="jobs-list" style="overflow-y:auto;">
+                <div class="content-placeholder">Loading…</div>
             </div>
-
-            <!-- Resume / cover viewer -->
-            <div id="viewer-panel" class="hist-card">
-                <div class="hist-card-header">
-                    <span id="viewer-title" style="font-size:0.92rem;font-weight:600;"></span>
-                    <div class="d-flex gap-2 flex-wrap" style="flex-shrink:0;">
-                        <button class="btn-toolbar-jat" id="copy-resume-btn" type="button">Copy Resume</button>
-                        <button class="btn-toolbar-jat" id="copy-cover-btn" type="button">Copy Cover</button>
-                    </div>
-                </div>
-                <div class="hist-card-body p-2" style="overflow:visible;">
-                    <ul class="nav nav-tabs mb-2 px-1 pt-1" id="viewer-tabs">
-                        <li class="nav-item">
-                            <button class="nav-link active" data-tab="resume">Resume</button>
-                        </li>
-                        <li class="nav-item">
-                            <button class="nav-link" data-tab="cover">Cover letter</button>
-                        </li>
-                    </ul>
-                    <div id="tab-resume" class="tab-content-pane active px-1 pb-2">
-                        <pre id="viewer-resume" class="content-pre">–</pre>
-                    </div>
-                    <div id="tab-cover" class="tab-content-pane px-1 pb-2">
-                        <pre id="viewer-cover" class="content-pre">–</pre>
-                    </div>
-                </div>
-            </div>
-
-            <!-- One-up form -->
-            <div id="oneup-panel" class="hist-card mt-3" style="display:none;">
-                <div class="hist-card-header">
-                    <span>One-up refinement</span>
-                    <button id="oneup-close" class="btn-toolbar-jat" type="button">Close</button>
-                </div>
-                <div class="p-3">
-                    <div class="mb-2" style="font-size:0.88rem;color:var(--muted);">Describe what to improve. A new generation run will be queued with that focus.</div>
-                    <div class="mb-2">
-                        <label class="form-label" style="font-size:0.88rem;">Focus</label>
-                        <input id="focus" class="form-control" placeholder="e.g., tighten bullets, stronger impact" style="font-size:0.92rem;">
-                    </div>
-                    <button id="oneup-submit" class="btn btn-primary" type="button">Queue one-up</button>
-                    <div id="oneup-msg" style="font-size:0.84rem;color:var(--muted);margin-top:0.5rem;"></div>
+            <!-- Pagination footer -->
+            <div class="hist-card-footer">
+                <span class="page-info" id="page-info"></span>
+                <div class="ms-auto d-flex align-items-center gap-1">
+                    <button id="prev-page" class="btn-hdr" type="button" disabled style="border-color:var(--border);background:var(--surface);color:var(--text-2);">←</button>
+                    <select id="limit-select" class="limit-select">
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="0">All</option>
+                    </select>
+                    <button id="next-page" class="btn-hdr" type="button" disabled style="border-color:var(--border);background:var(--surface);color:var(--text-2);">→</button>
                 </div>
             </div>
         </div>
     </div>
+
+    <!-- ================================================================
+         COL 2 — Resume
+    ================================================================ -->
+    <div class="col-12 col-lg-3 col-panel">
+        <div class="hist-card">
+            <div class="hist-card-header">
+                <span style="font-weight:700;white-space:nowrap;flex:1;">Resume</span>
+                <button id="copy-resume-btn" class="btn-hdr" type="button">Copy</button>
+                <button id="dl-resume-btn" class="btn-hdr" type="button" title="Download as .md">↓</button>
+            </div>
+            <div class="hist-card-body">
+                <div id="viewer-resume" class="content-md"><span class="content-placeholder">← Select a job to view the resume.</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================================================================
+         COL 3 — Cover Letter
+    ================================================================ -->
+    <div class="col-12 col-lg-3 col-panel">
+        <div class="hist-card">
+            <div class="hist-card-header">
+                <span style="font-weight:700;white-space:nowrap;flex:1;">Cover Letter</span>
+                <button id="copy-cover-btn" class="btn-hdr" type="button">Copy</button>
+                <button id="dl-cover-btn" class="btn-hdr" type="button" title="Download as .md">↓</button>
+            </div>
+            <div class="hist-card-body">
+                <div id="viewer-cover" class="content-md"><span class="content-placeholder">← Select a job to view the cover letter.</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================================================================
+         COL 4 — Interview Prep (permanent)
+    ================================================================ -->
+    <div class="col-12 col-lg-3 col-panel">
+        <div class="hist-card">
+            <div class="hist-card-header" style="flex-wrap:wrap;row-gap:0.25rem;">
+                <span style="font-weight:700;white-space:nowrap;">Interview Prep</span>
+                <span class="pii-badge" title="Contact info is redacted before being sent to the AI">🔒 PII redacted</span>
+                <div class="d-flex align-items-center gap-1 ms-auto flex-wrap">
+                    <select id="prep-version-select" class="prep-select">
+                        <option value="">– version –</option>
+                    </select>
+                    <button id="prep-regenerate-btn" class="btn-hdr" type="button" disabled>Regen</button>
+                    <button id="copy-prep-btn" class="btn-hdr" type="button" disabled>Copy</button>
+                    <button id="dl-prep-btn" class="btn-hdr" type="button" disabled title="Download as .md">↓</button>
+                </div>
+            </div>
+            <!-- Custom context input -->
+            <div id="prep-context-wrap" style="padding:0.5rem 0.75rem 0;border-bottom:1px solid var(--border);">
+                <textarea id="prep-context-input" rows="2"
+                    placeholder="Optional: focus areas, concerns, or notes for the AI (e.g. 'Focus on leadership and system design')"
+                    style="width:100%;font-size:0.78rem;padding:0.35rem 0.5rem;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface2);color:var(--text);resize:vertical;line-height:1.4;"></textarea>
+            </div>
+            <!-- 2-step progress indicator (shown while generating) -->
+            <div id="prep-progress">
+                <div id="prep-step1" class="prep-step pending">
+                    <span class="prep-step-dot">○</span>
+                    <span class="prep-step-label">Pass 1: Analyzing requirements</span>
+                    <span id="prep-step1-spin"></span>
+                </div>
+                <div id="prep-step2" class="prep-step pending">
+                    <span class="prep-step-dot">○</span>
+                    <span class="prep-step-label">Pass 2: Writing prep document</span>
+                    <span id="prep-step2-spin"></span>
+                </div>
+            </div>
+            <div class="hist-card-body">
+                <div id="viewer-prep" class="content-md"><span class="content-placeholder">Select a job then click Prep ▶ to generate interview questions, answers &amp; tips.</span></div>
+            </div>
+        </div>
+    </div>
+
+</div><!-- /main four-column row -->
+
+<!-- ====================================================================
+     Full-width: One-up collapsible
+===================================================================== -->
+<div id="oneup-panel" class="hist-card mb-2">
+    <div class="hist-card-header">
+        <span>One-up refinement</span>
+        <button id="oneup-close" class="btn-hdr" type="button">Close ✕</button>
+    </div>
+    <div class="p-3">
+        <div class="mb-2" style="font-size:0.85rem;color:var(--muted);">Describe what to improve. A new generation run will be queued with that focus.</div>
+        <div class="mb-2">
+            <label class="form-label" style="font-size:0.85rem;">Focus</label>
+            <input id="focus" class="form-control" placeholder="e.g., tighten bullets, stronger impact" style="font-size:0.9rem;">
+        </div>
+        <button id="oneup-submit" class="btn btn-primary btn-sm" type="button">Queue one-up</button>
+        <div id="oneup-msg" style="font-size:0.82rem;color:var(--muted);margin-top:0.4rem;"></div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
-(function() {
+(function () {
+    /* ------------------------------------------------------------------ */
+    /* Utilities                                                            */
+    /* ------------------------------------------------------------------ */
     function esc(s) {
         return (s || '').toString()
-            .replaceAll('&','&amp;').replaceAll('<','&lt;')
-            .replaceAll('>','&gt;').replaceAll('"','&quot;')
-            .replaceAll("'","&#39;");
+            .replaceAll('&', '&amp;').replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;').replaceAll('"', '&quot;')
+            .replaceAll("'", '&#39;');
     }
     function ts(epoch) {
         if (!epoch) return '–';
-        return new Date(epoch * 1000).toLocaleString([], {dateStyle:'short', timeStyle:'short'});
+        return new Date(epoch * 1000).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
     }
-
-    var _selectedJobKey = null;
-    var _checkedKeys = new Set();
-    var _currentOffset = 0;
-    var _currentLimit = 20;
-    var _totalJobs = 0;
-    var _allJobsInPage = [];
-
-    function updatePaginationUI() {
-        var limit = _currentLimit;
-        var start = _currentOffset + 1;
-        var end = limit > 0 ? Math.min(_currentOffset + limit, _totalJobs) : _totalJobs;
-        document.getElementById('page-info').textContent =
-            _totalJobs === 0 ? '' : (start + '–' + end + ' of ' + _totalJobs);
-        document.getElementById('prev-page').disabled = _currentOffset <= 0;
-        document.getElementById('next-page').disabled = limit <= 0 || (_currentOffset + limit >= _totalJobs);
-    }
-
-    document.getElementById('limit-select').addEventListener('change', function() {
-        _currentLimit = parseInt(this.value) || 0;
-        _currentOffset = 0;
-        _checkedKeys.clear();
-        loadJobs();
-    });
-    document.getElementById('prev-page').addEventListener('click', function() {
-        _currentOffset = Math.max(0, _currentOffset - _currentLimit);
-        _checkedKeys.clear();
-        loadJobs();
-    });
-    document.getElementById('next-page').addEventListener('click', function() {
-        _currentOffset += _currentLimit;
-        _checkedKeys.clear();
-        loadJobs();
-    });
-
-    function updateDeleteBtn() {
-        var btn = document.getElementById('delete-sel-btn');
-        btn.disabled = _checkedKeys.size === 0;
-        btn.textContent = _checkedKeys.size > 0 ? 'Delete (' + _checkedKeys.size + ')' : 'Delete Selected';
-    }
-
-    function updateSelectAllBtn() {
-        var allChecked = _allJobsInPage.length > 0 &&
-            _allJobsInPage.every(function(j){ return _checkedKeys.has(j.job_key); });
-        document.getElementById('select-all-btn').textContent = allChecked ? 'Deselect All' : 'Select All';
-    }
-
-    document.getElementById('select-all-btn').addEventListener('click', function() {
-        var allChecked = _allJobsInPage.length > 0 &&
-            _allJobsInPage.every(function(j){ return _checkedKeys.has(j.job_key); });
-        _allJobsInPage.forEach(function(j) {
-            if (allChecked) _checkedKeys.delete(j.job_key);
-            else _checkedKeys.add(j.job_key);
-        });
-        document.querySelectorAll('.job-cb').forEach(function(cb) {
-            cb.checked = _checkedKeys.has(cb.dataset.key);
-        });
-        updateDeleteBtn();
-        updateSelectAllBtn();
-    });
-
-    document.getElementById('delete-sel-btn').addEventListener('click', async function() {
-        if (_checkedKeys.size === 0) return;
-        var names = _allJobsInPage
-            .filter(function(j){ return _checkedKeys.has(j.job_key); })
-            .map(function(j){ return j.job_title || j.job_key; })
-            .join('\n• ');
-        if (!confirm('Delete ' + _checkedKeys.size + ' job(s)?\n\n• ' + names + '\n\nThis cannot be undone.')) return;
-        var keys = Array.from(_checkedKeys);
-        try {
-            var r = await fetch('/api/history/jobs', {
-                method: 'DELETE',
-                headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({ job_keys: keys })
-            });
-            if (!r.ok) throw new Error('HTTP ' + r.status);
-            _checkedKeys.clear();
-            if (_selectedJobKey && keys.includes(_selectedJobKey)) {
-                _selectedJobKey = null;
-                document.getElementById('generations-panel').style.display = 'none';
-                document.getElementById('viewer-panel').style.display = 'none';
-            }
-            loadJobs();
-        } catch(e) {
-            alert('Delete failed: ' + e.message);
-        }
-    });
-
     function copyText(text, btn) {
-        navigator.clipboard.writeText(text || '').then(function() {
+        navigator.clipboard.writeText(text || '').then(function () {
             var old = btn.textContent; btn.textContent = 'Copied!';
-            setTimeout(function(){ btn.textContent = old; }, 1500);
-        }).catch(function() {
+            setTimeout(function () { btn.textContent = old; }, 1400);
+        }).catch(function () {
             var ta = document.createElement('textarea');
             ta.value = text || '';
             document.body.appendChild(ta); ta.select();
             document.execCommand('copy'); document.body.removeChild(ta);
             var old = btn.textContent; btn.textContent = 'Copied!';
-            setTimeout(function(){ btn.textContent = old; }, 1500);
+            setTimeout(function () { btn.textContent = old; }, 1400);
         });
     }
-    document.getElementById('copy-resume-btn').addEventListener('click', function() {
-        copyText(document.getElementById('viewer-resume').textContent, this);
+
+    /* ------------------------------------------------------------------ */
+    /* Markdown renderer                                                    */
+    /* ------------------------------------------------------------------ */
+    function renderMd(text) {
+        if (!text || !window.marked) return '<em style="color:var(--muted);">(empty)</em>';
+        try { return marked.parse(text); } catch (_) { return '<pre>' + esc(text) + '</pre>'; }
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Download helper                                                      */
+    /* ------------------------------------------------------------------ */
+    function downloadText(text, filename) {
+        var blob = new Blob([text || ''], { type: 'text/plain' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url; a.download = filename;
+        document.body.appendChild(a); a.click();
+        document.body.removeChild(a); URL.revokeObjectURL(url);
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* State                                                                */
+    /* ------------------------------------------------------------------ */
+    var _selectedJobKey = null;
+    var _selectedJobData = null;
+    var _currentOffset = 0;
+    var _currentLimit = 20;
+    var _totalJobs = 0;
+    var _allJobsInPage = [];
+    var _prepEventSource = null;
+    // Raw markdown text — kept in sync so download always has the source
+    var _currentResumeText = '';
+    var _currentCoverText  = '';
+    var _currentPrepText   = '';
+    // Streaming buffer for live markdown rendering
+    var _prepStreamBuffer  = '';
+    var _prepRenderPending = false;
+
+    /* ------------------------------------------------------------------ */
+    /* Pagination                                                           */
+    /* ------------------------------------------------------------------ */
+    function updatePaginationUI() {
+        var limit = _currentLimit;
+        var start = _currentOffset + 1;
+        var end = limit > 0 ? Math.min(_currentOffset + limit, _totalJobs) : _totalJobs;
+        document.getElementById('page-info').textContent =
+            _totalJobs === 0 ? '' : (start + '–' + end + ' / ' + _totalJobs);
+        document.getElementById('prev-page').disabled = _currentOffset <= 0;
+        document.getElementById('next-page').disabled = limit <= 0 || (_currentOffset + limit >= _totalJobs);
+    }
+
+    document.getElementById('limit-select').addEventListener('change', function () {
+        _currentLimit = parseInt(this.value) || 0;
+        _currentOffset = 0;
+        loadJobs();
     });
-    document.getElementById('copy-cover-btn').addEventListener('click', function() {
-        copyText(document.getElementById('viewer-cover').textContent, this);
+    document.getElementById('prev-page').addEventListener('click', function () {
+        _currentOffset = Math.max(0, _currentOffset - _currentLimit);
+        loadJobs();
+    });
+    document.getElementById('next-page').addEventListener('click', function () {
+        _currentOffset += _currentLimit;
+        loadJobs();
+    });
+    document.getElementById('refresh').addEventListener('click', function () {
+        _currentOffset = 0;
+        loadJobs();
     });
 
-    document.getElementById('viewer-tabs').addEventListener('click', function(e) {
-        var btn = e.target.closest('[data-tab]');
-        if (!btn) return;
-        document.querySelectorAll('#viewer-tabs .nav-link').forEach(function(b){ b.classList.remove('active'); });
-        btn.classList.add('active');
-        document.querySelectorAll('.tab-content-pane').forEach(function(p){ p.classList.remove('active'); });
-        document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    /* ------------------------------------------------------------------ */
+    /* Enable / disable job-level controls                                  */
+    /* ------------------------------------------------------------------ */
+    function setJobControls(enabled) {
+        document.getElementById('oneup-btn').disabled = !enabled;
+        document.getElementById('delete-btn').disabled = !enabled;
+        document.getElementById('interview-prep-btn').disabled = !enabled;
+        document.getElementById('gen-version-select').disabled = !enabled;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Delete selected job                                                  */
+    /* ------------------------------------------------------------------ */
+    document.getElementById('delete-btn').addEventListener('click', async function () {
+        if (!_selectedJobKey) return;
+        var name = (_selectedJobData && (_selectedJobData.job_title || _selectedJobData.job_key)) || _selectedJobKey;
+        if (!confirm('Delete "' + name + '"?\nThis cannot be undone.')) return;
+        try {
+            var r = await fetch('/api/history/jobs', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ job_keys: [_selectedJobKey] })
+            });
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            _selectedJobKey = null;
+            _selectedJobData = null;
+            setJobControls(false);
+            clearContent();
+            document.getElementById('oneup-panel').style.display = 'none';
+            loadJobs();
+        } catch (e) {
+            alert('Delete failed: ' + e.message);
+        }
     });
 
-    async function loadGenContent(jobKey, version, label) {
-        document.getElementById('viewer-panel').style.display = '';
-        document.getElementById('viewer-title').textContent = 'Loading v' + version + '…';
-        document.getElementById('viewer-resume').textContent = 'Loading…';
-        document.getElementById('viewer-cover').textContent = 'Loading…';
+    function clearContent() {
+        _currentResumeText = '';
+        _currentCoverText  = '';
+        document.getElementById('viewer-resume').innerHTML = '<span class="content-placeholder">← Select a job to view the resume.</span>';
+        document.getElementById('viewer-cover').innerHTML  = '<span class="content-placeholder">← Select a job to view the cover letter.</span>';
+        document.getElementById('gen-version-select').innerHTML = '<option value="">– ver –</option>';
+        resetPrepPanel();
+    }
+
+    function resetPrepPanel() {
+        _currentPrepText   = '';
+        _prepStreamBuffer  = '';
+        _prepRenderPending = false;
+        document.getElementById('prep-progress').style.display = 'none';
+        document.getElementById('prep-version-select').innerHTML = '<option value="">– version –</option>';
+        document.getElementById('prep-regenerate-btn').disabled = true;
+        document.getElementById('copy-prep-btn').disabled = true;
+        document.getElementById('dl-prep-btn').disabled = true;
+        document.getElementById('viewer-prep').innerHTML =
+            '<span class="content-placeholder">Select a job then click Prep ▶ to generate interview questions, answers &amp; tips.</span>';
+        resetStepIndicator();
+    }
+
+    function resetStepIndicator() {
+        ['1','2'].forEach(function(n) {
+            var row = document.getElementById('prep-step' + n);
+            row.className = 'prep-step pending';
+            row.querySelector('.prep-step-dot').textContent = '○';
+            document.getElementById('prep-step' + n + '-spin').innerHTML = '';
+        });
+    }
+
+    function setStep(n, state) {
+        // state: 'active' | 'done' | 'pending'
+        var row = document.getElementById('prep-step' + n);
+        var dot = row.querySelector('.prep-step-dot');
+        var spin = document.getElementById('prep-step' + n + '-spin');
+        row.className = 'prep-step ' + state;
+        if (state === 'active') {
+            dot.textContent = '●';
+            spin.innerHTML = '<span class="prep-step-spin"></span>';
+        } else if (state === 'done') {
+            dot.textContent = '✓';
+            spin.innerHTML = '';
+        } else {
+            dot.textContent = '○';
+            spin.innerHTML = '';
+        }
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Copy + Download buttons                                             */
+    /* ------------------------------------------------------------------ */
+    document.getElementById('copy-resume-btn').addEventListener('click', function () {
+        copyText(_currentResumeText, this);
+    });
+    document.getElementById('copy-cover-btn').addEventListener('click', function () {
+        copyText(_currentCoverText, this);
+    });
+    document.getElementById('copy-prep-btn').addEventListener('click', function () {
+        copyText(_currentPrepText, this);
+    });
+    document.getElementById('dl-resume-btn').addEventListener('click', function () {
+        var slug = (_selectedJobData && (_selectedJobData.job_title || _selectedJobData.job_key) || 'resume')
+            .replace(/[^\w\s-]/g,'').trim().replace(/\s+/g,'-').slice(0,40);
+        downloadText(_currentResumeText, 'resume-' + slug + '.md');
+    });
+    document.getElementById('dl-cover-btn').addEventListener('click', function () {
+        var slug = (_selectedJobData && (_selectedJobData.job_title || _selectedJobData.job_key) || 'cover')
+            .replace(/[^\w\s-]/g,'').trim().replace(/\s+/g,'-').slice(0,40);
+        downloadText(_currentCoverText, 'cover-letter-' + slug + '.md');
+    });
+    document.getElementById('dl-prep-btn').addEventListener('click', function () {
+        var slug = (_selectedJobData && (_selectedJobData.job_title || _selectedJobData.job_key) || 'prep')
+            .replace(/[^\w\s-]/g,'').trim().replace(/\s+/g,'-').slice(0,40);
+        downloadText(_currentPrepText, 'interview-prep-' + slug + '.md');
+    });
+
+    /* ------------------------------------------------------------------ */
+    /* Load generation content                                              */
+    /* ------------------------------------------------------------------ */
+    async function loadGenContent(jobKey, version) {
+        document.getElementById('viewer-resume').innerHTML = '<em style="color:var(--muted);">Loading…</em>';
+        document.getElementById('viewer-cover').innerHTML  = '<em style="color:var(--muted);">Loading…</em>';
         try {
             var r = await fetch('/api/history/' + encodeURIComponent(jobKey) + '/generation/' + version);
             if (!r.ok) throw new Error('HTTP ' + r.status);
             var data = await r.json();
-            document.getElementById('viewer-title').textContent =
-                (label || '') + ' — v' + version +
-                (data.focus ? ' · focus: ' + data.focus : '') +
-                ' · ' + ts(data.created_at);
-            document.getElementById('viewer-resume').textContent = data.resume_md || '(none)';
-            document.getElementById('viewer-cover').textContent = data.cover_md || '(none)';
-            document.querySelectorAll('#viewer-tabs .nav-link').forEach(function(b){ b.classList.remove('active'); });
-            document.querySelector('#viewer-tabs [data-tab="resume"]').classList.add('active');
-            document.querySelectorAll('.tab-content-pane').forEach(function(p){ p.classList.remove('active'); });
-            document.getElementById('tab-resume').classList.add('active');
-            document.querySelectorAll('.gen-row').forEach(function(r){ r.classList.remove('active-gen'); });
-            document.querySelectorAll('.gen-row[data-version="' + version + '"]').forEach(function(r){ r.classList.add('active-gen'); });
-        } catch(e) {
-            document.getElementById('viewer-title').textContent = 'Error';
-            document.getElementById('viewer-resume').textContent = 'Failed: ' + e.message;
-            document.getElementById('viewer-cover').textContent = '';
+            _currentResumeText = data.resume_md || '';
+            _currentCoverText  = data.cover_md  || '';
+            document.getElementById('viewer-resume').innerHTML = _currentResumeText
+                ? renderMd(_currentResumeText)
+                : '<span class="content-placeholder">(no resume)</span>';
+            document.getElementById('viewer-cover').innerHTML = _currentCoverText
+                ? renderMd(_currentCoverText)
+                : '<span class="content-placeholder">(no cover letter)</span>';
+        } catch (e) {
+            document.getElementById('viewer-resume').innerHTML = '<span style="color:var(--danger);">Error: ' + esc(e.message) + '</span>';
+            document.getElementById('viewer-cover').innerHTML  = '';
         }
     }
 
-    async function loadGenerations(jobKey, jobTitle, jobUrl) {
-        _selectedJobKey = jobKey;
-        var panel = document.getElementById('generations-panel');
-        panel.style.display = '';
-        document.getElementById('gen-job-title').textContent = jobTitle || jobKey;
-        var urlEl = document.getElementById('gen-job-url');
-        if (jobUrl) {
-            urlEl.innerHTML = '<a href="' + esc(jobUrl) + '" target="_blank" rel="noopener" style="color:#bfdbfe;">'
-                + esc(jobUrl.replace(/^https?:\/\//, '').slice(0, 80)) + (jobUrl.length > 85 ? '…' : '') + '</a>';
-        } else { urlEl.textContent = ''; }
+    document.getElementById('gen-version-select').addEventListener('change', function () {
+        if (!_selectedJobKey || !this.value) return;
+        loadGenContent(_selectedJobKey, parseInt(this.value));
+    });
 
-        var tbody = document.getElementById('gen-body');
-        tbody.innerHTML = '<tr><td colspan="5" class="text-muted p-3">Loading…</td></tr>';
+    /* ------------------------------------------------------------------ */
+    /* Select a job                                                         */
+    /* ------------------------------------------------------------------ */
+    async function selectJob(j) {
+        _selectedJobKey = j.job_key;
+        _selectedJobData = j;
+
+        // Highlight selected item
+        document.querySelectorAll('.job-item').forEach(function (el) { el.classList.remove('selected-job'); });
+        var el = document.querySelector('.job-item[data-key="' + j.job_key + '"]');
+        if (el) el.classList.add('selected-job');
+
+        // Enable controls
+        setJobControls(true);
+
+        // Stub while loading
+        document.getElementById('viewer-resume').innerHTML = '<em style="color:var(--muted);">Loading…</em>';
+        document.getElementById('viewer-cover').innerHTML  = '<em style="color:var(--muted);">Loading…</em>';
+        document.getElementById('gen-version-select').innerHTML = '<option value="">Loading…</option>';
+        document.getElementById('gen-version-select').disabled = true;
+
         try {
-            var r = await fetch('/api/history/' + encodeURIComponent(jobKey) + '/generations');
+            var r = await fetch('/api/history/' + encodeURIComponent(j.job_key) + '/generations');
             if (!r.ok) throw new Error('HTTP ' + r.status);
             var data = await r.json();
             var gens = data.generations || [];
+            var sel = document.getElementById('gen-version-select');
+            sel.innerHTML = '';
             if (!gens.length) {
-                tbody.innerHTML = '<tr><td colspan="5" class="text-muted p-3">No generations yet.</td></tr>';
-                return;
-            }
-            tbody.innerHTML = '';
-            gens.forEach(function(g) {
-                var seq = '';
-                try {
-                    var arr = JSON.parse(g.model_sequence_json || '[]');
-                    if (Array.isArray(arr) && arr.length)
-                        seq = arr.map(function(s){ return (s||'').split(':').pop(); }).join(' → ');
-                } catch(_) {}
-                var tr = document.createElement('tr');
-                tr.className = 'gen-row';
-                tr.dataset.version = g.version;
-                tr.innerHTML =
-                    '<td><span class="badge bg-secondary">' + esc(g.version) + '</span></td>' +
-                    '<td style="font-size:0.85rem;">' + ts(g.created_at) + '</td>' +
-                    '<td style="font-size:0.82rem;color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + esc(g.focus||'') + '">' + esc(g.focus || '–') + '</td>' +
-                    '<td style="font-size:0.78rem;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + esc(seq) + '">' + esc(seq || '–') + '</td>' +
-                    '<td class="text-end"><button class="btn btn-sm btn-outline-primary" type="button" style="font-size:0.8rem;">View</button></td>';
-                tr.querySelector('button').addEventListener('click', function() {
-                    loadGenContent(jobKey, g.version, jobTitle);
+                sel.innerHTML = '<option value="">No versions</option>';
+                document.getElementById('viewer-resume').innerHTML = '<span class="content-placeholder">(no generations yet)</span>';
+                document.getElementById('viewer-cover').innerHTML  = '';
+            } else {
+                gens.forEach(function (g) {
+                    var opt = document.createElement('option');
+                    opt.value = g.version;
+                    var lbl = 'v' + g.version + ' ' + ts(g.created_at);
+                    if (g.focus) lbl += ' · ' + g.focus.slice(0, 22);
+                    opt.textContent = lbl;
+                    sel.appendChild(opt);
                 });
-                tbody.appendChild(tr);
-            });
-            if (gens[0]) loadGenContent(jobKey, gens[0].version, jobTitle);
-        } catch(e) {
-            tbody.innerHTML = '<tr><td colspan="5" class="text-danger p-3">Failed: ' + esc(e.message) + '</td></tr>';
+                sel.value = gens[0].version;
+                sel.disabled = false;
+                loadGenContent(j.job_key, gens[0].version);
+            }
+        } catch (e) {
+            document.getElementById('viewer-resume').innerHTML = '<span style="color:var(--danger);">Failed to load: ' + esc(e.message) + '</span>';
+            document.getElementById('viewer-cover').innerHTML  = '';
         }
+
+        // Reset and reload interview prep panel for this job
+        resetPrepPanel();
+        loadInterviewPreps(j.job_key);
     }
 
-    async function loadJobs() {
-        var list = document.getElementById('jobs-list');
-        list.innerHTML = '<div class="p-3 text-muted">Loading…</div>';
-        var limit = _currentLimit;
-        var url = '/api/history/jobs?limit=' + limit + '&offset=' + _currentOffset;
+    /* ------------------------------------------------------------------ */
+    /* Interview Prep                                                       */
+    /* ------------------------------------------------------------------ */
+    async function loadInterviewPreps(jobKey) {
         try {
-            var r = await fetch(url);
+            var r = await fetch('/api/history/' + encodeURIComponent(jobKey) + '/interview-preps');
+            if (!r.ok) return;
             var data = await r.json();
-            _totalJobs = data.total || 0;
-            var items = data.jobs || [];
-            _allJobsInPage = items;
-            document.getElementById('jobs-count').textContent =
-                _totalJobs > 0 ? '(' + _totalJobs + ' total)' : '';
-            updatePaginationUI();
-            updateDeleteBtn();
-            updateSelectAllBtn();
-            if (!items.length) {
-                list.innerHTML = '<div class="p-3 text-muted small">'
-                    + (_totalJobs === 0 ? 'No history yet. Complete some jobs first.' : 'No jobs on this page.')
-                    + '</div>';
-                return;
-            }
-            list.innerHTML = '';
-            items.forEach(function(j) {
-                var div = document.createElement('div');
-                div.className = 'job-item' + (j.job_key === _selectedJobKey ? ' selected-job' : '');
-                var cb = document.createElement('input');
-                cb.type = 'checkbox'; cb.className = 'job-cb'; cb.dataset.key = j.job_key;
-                cb.checked = _checkedKeys.has(j.job_key);
-                cb.addEventListener('change', function(e) {
-                    e.stopPropagation();
-                    if (cb.checked) _checkedKeys.add(j.job_key);
-                    else _checkedKeys.delete(j.job_key);
-                    updateDeleteBtn(); updateSelectAllBtn();
-                });
-                var text = document.createElement('div');
-                text.className = 'job-item-text';
-                text.innerHTML =
-                    '<div class="job-item-title" title="' + esc(j.job_title || j.job_key) + '">'
-                        + esc(j.job_title || j.job_key) + '</div>' +
-                    '<div class="job-item-url">' + esc((j.url||'').replace(/^https?:\/\//,'').slice(0,60)) + '</div>' +
-                    '<div class="job-item-meta">' + ts(j.created_at)
-                        + (j.latest_version ? ' · v' + j.latest_version : '') + '</div>';
-                text.addEventListener('click', function() {
-                    document.querySelectorAll('.job-item').forEach(function(el){ el.classList.remove('selected-job'); });
-                    div.classList.add('selected-job');
-                    loadGenerations(j.job_key, j.job_title, j.url);
-                });
-                div.appendChild(cb);
-                div.appendChild(text);
-                list.appendChild(div);
+            var preps = data.preps || [];
+            if (!preps.length) return;
+            var sel = document.getElementById('prep-version-select');
+            sel.innerHTML = '';
+            preps.forEach(function (p) {
+                var opt = document.createElement('option');
+                opt.value = p.version;
+                opt.textContent = 'v' + p.version + ' · ' + ts(p.created_at);
+                sel.appendChild(opt);
             });
-        } catch(e) {
-            list.innerHTML = '<div class="p-3 text-danger small">Failed to load history.</div>';
+            sel.value = preps[0].version;
+            document.getElementById('prep-regenerate-btn').disabled = false;
+            document.getElementById('copy-prep-btn').disabled = false;
+            loadInterviewPrepContent(jobKey, preps[0].version);
+        } catch (e) { /* no preps yet — placeholder stays */ }
+    }
+
+    // Like loadInterviewPreps but does NOT replace the viewer content —
+    // used after streaming so we keep what was already rendered live.
+    async function loadInterviewPrepsVersionsOnly(jobKey) {
+        try {
+            var r = await fetch('/api/history/' + encodeURIComponent(jobKey) + '/interview-preps');
+            if (!r.ok) return;
+            var data = await r.json();
+            var preps = data.preps || [];
+            if (!preps.length) return;
+            var sel = document.getElementById('prep-version-select');
+            sel.innerHTML = '';
+            preps.forEach(function (p) {
+                var opt = document.createElement('option');
+                opt.value = p.version;
+                opt.textContent = 'v' + p.version + ' · ' + ts(p.created_at);
+                sel.appendChild(opt);
+            });
+            sel.value = preps[0].version;
+            document.getElementById('prep-regenerate-btn').disabled = false;
+            document.getElementById('copy-prep-btn').disabled = false;
+            // Viewer already has live-streamed content — don't overwrite it.
+        } catch (e) {}
+    }
+
+    async function loadInterviewPrepContent(jobKey, version) {
+        document.getElementById('viewer-prep').innerHTML = '<em style="color:var(--muted);">Loading…</em>';
+        try {
+            var r = await fetch('/api/history/' + encodeURIComponent(jobKey) + '/interview-prep/' + version);
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            var data = await r.json();
+            _currentPrepText = data.prep_md || '';
+            document.getElementById('viewer-prep').innerHTML = _currentPrepText
+                ? renderMd(_currentPrepText)
+                : '<span class="content-placeholder">(empty)</span>';
+            document.getElementById('copy-prep-btn').disabled = false;
+            document.getElementById('dl-prep-btn').disabled = false;
+        } catch (e) {
+            document.getElementById('viewer-prep').innerHTML = '<span style="color:var(--danger);">Failed to load: ' + esc(e.message) + '</span>';
         }
     }
 
-    document.getElementById('oneup-btn').addEventListener('click', function() {
-        var panel = document.getElementById('oneup-panel');
-        panel.style.display = panel.style.display === 'none' ? '' : 'none';
+    document.getElementById('prep-version-select').addEventListener('change', function () {
+        if (!_selectedJobKey || !this.value) return;
+        loadInterviewPrepContent(_selectedJobKey, parseInt(this.value));
     });
-    document.getElementById('oneup-close').addEventListener('click', function() {
+
+    function getInterviewModelSequence() {
+        try {
+            var raw = localStorage.getItem('jat_interview_sequence_v1');
+            if (raw) {
+                var seq = JSON.parse(raw);
+                if (Array.isArray(seq) && seq.length)
+                    return seq.map(function (s) { return s.id || s; });
+            }
+        } catch (_) {}
+        // Nothing saved yet — return DeepSeek defaults and show a hint
+        _prepUnconfigured = true;
+        return ['deepseek:deepseek-reasoner', 'deepseek:deepseek-chat'];
+    }
+
+    var _prepUnconfigured = false;
+
+    async function triggerInterviewPrep() {
+        if (!_selectedJobKey) return;
+        _prepUnconfigured = false;
+        var modelSeq = getInterviewModelSequence();
+        // Show progress area, reset steps
+        document.getElementById('prep-progress').style.display = '';
+        resetStepIndicator();
+        setStep('1', 'active');
+        _prepStreamBuffer  = '';
+        _prepRenderPending = false;
+        _currentPrepText   = '';
+        var hint = _prepUnconfigured
+            ? '<p style="font-size:0.75rem;color:var(--muted);">Using DeepSeek defaults — <a href="/sequencer" style="color:var(--accent);">configure in Sequencer</a> to customise.</p>'
+            : '';
+        document.getElementById('viewer-prep').innerHTML =
+            hint + '<em style="color:var(--muted);font-size:0.82rem;">Generating — this may take several minutes…</em>';
+        document.getElementById('interview-prep-btn').disabled = true;
+        document.getElementById('prep-regenerate-btn').disabled = true;
+        document.getElementById('copy-prep-btn').disabled = true;
+        try {
+            var r = await fetch('/api/history/interview-prep', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    job_key: _selectedJobKey,
+                    model_sequence: modelSeq,
+                    extra_context: (document.getElementById('prep-context-input').value || '').trim()
+                })
+            });
+            var data = await r.json();
+            if (!r.ok) {
+                document.getElementById('viewer-prep').innerHTML =
+                    '<span style="color:var(--danger);">Failed: ' + esc(data.detail ? JSON.stringify(data.detail) : 'error') + '</span>';
+                document.getElementById('prep-progress').style.display = 'none';
+                document.getElementById('interview-prep-btn').disabled = false;
+                return;
+            }
+            pollPrepStatus(_selectedJobKey, data.job_id);
+        } catch (e) {
+            document.getElementById('viewer-prep').innerHTML =
+                '<span style="color:var(--danger);">Error: ' + esc(e.message) + '</span>';
+            document.getElementById('prep-progress').style.display = 'none';
+            document.getElementById('interview-prep-btn').disabled = false;
+        }
+    }
+
+    function pollPrepStatus(jobKey, jobId) {
+        if (_prepEventSource) { try { _prepEventSource.close(); } catch (_) {} }
+        _prepEventSource = new EventSource('/stream/' + encodeURIComponent(jobId));
+        _prepEventSource.onmessage = function (e) {
+            try {
+                var evt = JSON.parse(e.data);
+                var viewer = document.getElementById('viewer-prep');
+
+                // Clear buffer when transitioning from pass 1 → pass 2
+                if (evt.clear) {
+                    _prepStreamBuffer  = '';
+                    _prepRenderPending = false;
+                    viewer.innerHTML   = '';
+                }
+
+                // Stream text chunk — accumulate and re-render with rAF throttle
+                if (evt.chunk) {
+                    _prepStreamBuffer += evt.chunk;
+                    if (!_prepRenderPending) {
+                        _prepRenderPending = true;
+                        requestAnimationFrame(function () {
+                            var v = document.getElementById('viewer-prep');
+                            v.innerHTML = renderMd(_prepStreamBuffer);
+                            v.scrollTop = v.scrollHeight;
+                            _prepRenderPending = false;
+                        });
+                    }
+                }
+
+                // Drive the step indicator from the server-sent step field
+                if (evt.step === 1 && !evt.clear) {
+                    setStep('1', 'active');
+                    setStep('2', 'pending');
+                } else if (evt.step === 2) {
+                    setStep('1', 'done');
+                    setStep('2', 'active');
+                }
+
+                if (evt.status === 'complete') {
+                    setStep('1', 'done');
+                    setStep('2', 'done');
+                    _prepEventSource.close();
+                    // Final render of complete buffer (in case last rAF didn't fire)
+                    _currentPrepText = _prepStreamBuffer;
+                    document.getElementById('viewer-prep').innerHTML = renderMd(_currentPrepText);
+                    document.getElementById('interview-prep-btn').disabled = false;
+                    document.getElementById('prep-regenerate-btn').disabled = false;
+                    document.getElementById('copy-prep-btn').disabled = false;
+                    document.getElementById('dl-prep-btn').disabled = false;
+                    setTimeout(function () {
+                        document.getElementById('prep-progress').style.display = 'none';
+                    }, 1500);
+                    // Refresh version selector; don't overwrite viewer-prep (already streamed)
+                    loadInterviewPrepsVersionsOnly(jobKey);
+                } else if (evt.status === 'error') {
+                    _prepEventSource.close();
+                    document.getElementById('prep-progress').style.display = 'none';
+                    document.getElementById('interview-prep-btn').disabled = false;
+                    document.getElementById('prep-regenerate-btn').disabled = false;
+                    viewer.innerHTML = '<span style="color:var(--danger);">Error: ' + esc(evt.message || 'unknown error') + '</span>';
+                }
+            } catch (_) {}
+        };
+        _prepEventSource.onerror = function () {
+            _prepEventSource.close();
+            document.getElementById('prep-progress').style.display = 'none';
+            document.getElementById('interview-prep-btn').disabled = false;
+            document.getElementById('prep-regenerate-btn').disabled = false;
+        };
+    }
+
+    document.getElementById('interview-prep-btn').addEventListener('click', triggerInterviewPrep);
+    document.getElementById('prep-regenerate-btn').addEventListener('click', triggerInterviewPrep);
+
+    /* ------------------------------------------------------------------ */
+    /* One-up                                                               */
+    /* ------------------------------------------------------------------ */
+    document.getElementById('oneup-btn').addEventListener('click', function () {
+        var p = document.getElementById('oneup-panel');
+        p.style.display = (p.style.display === 'block') ? 'none' : 'block';
+    });
+    document.getElementById('oneup-close').addEventListener('click', function () {
         document.getElementById('oneup-panel').style.display = 'none';
     });
-    document.getElementById('oneup-submit').addEventListener('click', async function() {
+    document.getElementById('oneup-submit').addEventListener('click', async function () {
         var focus = (document.getElementById('focus').value || '').trim();
         if (!_selectedJobKey) { document.getElementById('oneup-msg').textContent = 'Select a job first.'; return; }
         if (!focus) { document.getElementById('oneup-msg').textContent = 'Focus is required.'; return; }
@@ -490,24 +930,64 @@
         try {
             var r = await fetch('/api/history/oneup', {
                 method: 'POST',
-                headers: {'Content-Type':'application/json'},
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ job_key: _selectedJobKey, focus: focus })
             });
             var data = await r.json();
-            if (!r.ok) { document.getElementById('oneup-msg').textContent = 'Failed: ' + (data.detail ? JSON.stringify(data.detail) : 'error'); return; }
-            document.getElementById('oneup-msg').textContent = 'Queued ' + data.job_id + '. Open from Status.';
+            if (!r.ok) {
+                document.getElementById('oneup-msg').textContent = 'Failed: ' + (data.detail ? JSON.stringify(data.detail) : 'error');
+                return;
+            }
+            document.getElementById('oneup-msg').textContent = 'Queued ' + data.job_id + '. Check Status page.';
             document.getElementById('focus').value = '';
-        } catch(e) {
+        } catch (e) {
             document.getElementById('oneup-msg').textContent = 'Error: ' + e.message;
         }
     });
 
-    document.getElementById('refresh').addEventListener('click', function() {
-        _currentOffset = 0;
-        _checkedKeys.clear();
-        loadJobs();
-    });
+    /* ------------------------------------------------------------------ */
+    /* Load jobs list                                                       */
+    /* ------------------------------------------------------------------ */
+    async function loadJobs() {
+        var list = document.getElementById('jobs-list');
+        list.innerHTML = '<div class="content-placeholder">Loading…</div>';
+        var url = '/api/history/jobs?limit=' + _currentLimit + '&offset=' + _currentOffset;
+        try {
+            var r = await fetch(url);
+            var data = await r.json();
+            _totalJobs = data.total || 0;
+            _allJobsInPage = data.jobs || [];
+            document.getElementById('jobs-count').textContent =
+                _totalJobs > 0 ? '(' + _totalJobs + ')' : '';
+            updatePaginationUI();
+            if (!_allJobsInPage.length) {
+                list.innerHTML = '<div class="content-placeholder">'
+                    + (_totalJobs === 0 ? 'No history yet. Complete some jobs first.' : 'No jobs on this page.')
+                    + '</div>';
+                return;
+            }
+            list.innerHTML = '';
+            _allJobsInPage.forEach(function (j) {
+                var div = document.createElement('div');
+                div.className = 'job-item' + (j.job_key === _selectedJobKey ? ' selected-job' : '');
+                div.dataset.key = j.job_key;
+                div.innerHTML =
+                    '<div class="job-item-title" title="' + esc(j.job_title || j.job_key) + '">'
+                    + esc(j.job_title || j.job_key) + '</div>'
+                    + '<div class="job-item-url">' + esc((j.url || '').replace(/^https?:\/\//, '').slice(0, 55)) + '</div>'
+                    + '<div class="job-item-meta">' + ts(j.created_at)
+                    + (j.latest_version ? ' · v' + j.latest_version : '') + '</div>';
+                div.addEventListener('click', function () { selectJob(j); });
+                list.appendChild(div);
+            });
+        } catch (e) {
+            list.innerHTML = '<div class="content-placeholder" style="color:var(--danger);">Failed to load history.</div>';
+        }
+    }
 
+    /* ------------------------------------------------------------------ */
+    /* Boot                                                                 */
+    /* ------------------------------------------------------------------ */
     loadJobs();
 })();
 </script>

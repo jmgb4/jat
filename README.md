@@ -17,11 +17,24 @@ Runs fully offline with [Ollama](https://ollama.com/). DeepSeek API is optional.
 
 ---
 
+## Features
+
+| Page | What it does |
+|------|-------------|
+| `/` (Home) | Paste one or more job URLs and kick off the generation pipeline |
+| `/job/<id>` | Live progress view — watch each pipeline pass run in real time |
+| `/history` | Browse every past application; view resume and cover letter side-by-side; download as Markdown |
+| **Interview Prep** | From the History page, click "Prep Interview" on any saved job to generate tailored STAR-format interview questions, answers, and delivery coaching. PII is redacted before any content is sent to DeepSeek. |
+| `/sequencer` | Assign a specific model to each pipeline pass for resume/cover letter and interview prep independently |
+| `/manage-models` | Browse, download, and manage local GGUF models |
+
+---
+
 ## Quick Start
 
 ```powershell
 # 1. Clone and set up
-git clone https://github.com/YOUR_USERNAME/job_app_tailor.git
+git clone https://github.com/jmgb4/jat.git
 cd job_app_tailor
 .\setup.ps1           # creates venv, installs deps, installs Playwright Chromium
 
@@ -122,6 +135,26 @@ If you have multiple resume files in `data/base_resume/`, the app detects the jo
 
 ---
 
+## Tips for Best Results
+
+**Context files make or break the output.** The AI can only write grounded, accurate content if your context files are detailed. Generic placeholders produce generic resumes.
+
+- **`story.txt` is the most important file.** The AI uses it to write specific bullet points instead of hallucinated fluff. Aim for 300–600 words per project: name the exact tools, the scale of the work, the team involved, and the measurable outcome. The more concrete, the better.
+
+- **`keywords.txt` controls vocabulary matching.** Use exact tool/platform names (`Nessus`, `Terraform`, `Splunk`) rather than generic category terms (`scanner`, `IaC tool`). The AI matches your keywords against the job description to ensure relevant terms appear naturally.
+
+- **`dos_and_donts.txt` is enforced on every pass.** If the AI keeps making the same mistake (output too long, wrong tone, wrong bullet format), add a rule to this file. It is applied on every generation run.
+
+- **Use the Sequencer for quality vs. speed trade-offs.** Open `/sequencer` to assign a different model to each pipeline pass. A common pattern: fast local model (e.g. `qwen3:8b`) for the draft and apply passes, DeepSeek Reasoner for review, DeepSeek Chat for polish. This gets near-GPT-4 quality at a fraction of the cost.
+
+- **Role-based resume selection.** If you apply to both IC/engineering and management/leadership roles, maintain two resume files (`resume_engineering.docx` and `resume_leadership.docx`) and set the paths in `.env`. The app reads the job description, classifies the role, and selects the best-matching resume automatically. See Configuration above.
+
+- **Workday and enterprise ATS sites often block scraping.** If you see "job description too short or missing", the site is blocking the headless browser. The result page shows a paste box — copy the full job description from the page and click **Retry with pasted description** to continue.
+
+- **Interview prep works best with a reasoning model.** The Interview Prep feature runs two passes: an analysis pass (best with DeepSeek Reasoner or a local thinking model) and a polish pass (DeepSeek Chat or equivalent). Configure these in `/sequencer` under the "Interview Prep" tab.
+
+---
+
 ## Model Management
 
 - **Ollama models:** Pull any model with `ollama pull <model>`. Set `OLLAMA_MODEL` in `.env`.
@@ -135,7 +168,7 @@ If you have multiple resume files in `data/base_resume/`, the app detects the jo
 | Script | Purpose | When to run |
 |--------|---------|-------------|
 | `setup.ps1` | Create venv, install dependencies, install Playwright Chromium | First-time setup |
-| `run.ps1` | Start the web app (`uvicorn`) | Every session |
+| `run.ps1` | Start the web app (`uvicorn`). Set `\=1` before running to disable hot-reload (recommended for batch jobs or stable sessions) | Every session |
 | `commit-build.ps1` | Commit all changes and push to GitHub | After code changes |
 | `fix_ollama.ps1` | Diagnose Ollama, pull primary model from `.env` | When Ollama or GPU models need checking |
 | `download_pass_models.ps1` | Download GGUF models used by the pipeline | When you want local GGUF models |
@@ -192,3 +225,18 @@ job_app_tailor/
 # E2E smoke test against a real job URL
 .\scripts\e2e_one_job.ps1
 ```
+
+---
+
+## Troubleshooting
+
+| Problem | Fix |
+|---------|-----|
+| `Ollama is not running` / connection refused on startup | Run `ollama serve` in a separate terminal, then restart the app |
+| Model not found / 404 error from Ollama | `ollama pull <model-name>` then restart. Run `ollama list` to confirm the model name is exact |
+| Playwright / Chromium not found | `.\venv\Scripts\python.exe -m playwright install chromium` |
+| "Job description too short or missing" on the result page | The site blocks headless browsers (common with Workday, iCIMS, Taleo). Use the paste box that appears on the result page — copy the full JD text and click **Retry with pasted description** |
+| Generation takes a very long time / seems stuck | Each pipeline pass loads the model fresh if eviction is enabled. Try: (1) reducing `OLLAMA_NUM_CTX` in `.env`, (2) using a smaller/faster model for the draft pass via the Sequencer, or (3) checking GPU utilisation with `nvidia-smi` |
+| Out of memory (OOM) / Ollama crashes | Lower `OLLAMA_NUM_GPU` in `.env` (e.g. `OLLAMA_NUM_GPU=20`) to keep some layers on CPU, or switch to a smaller quantisation (e.g. `Q4_K_M` instead of `Q8_0`) |
+| HuggingFace rate limits when downloading GGUF models | Set `HF_TOKEN` in `.env` with a free token from [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) |
+| App restarts unexpectedly while generating | Hot-reload is watching `app/` for changes. Set `$env:JAT_NO_RELOAD=1` before `.\run.ps1` to disable it |

@@ -36,8 +36,13 @@ class AIClient(ABC):
         on_token: Optional[Callable[[int], None]] = None,
         on_complete: Optional[Callable[[int, float], None]] = None,
         params: Optional[dict[str, Any]] = None,
+        on_chunk: Optional[Callable[[str], Any]] = None,
     ) -> str:
-        """Return generated text. When on_token/on_complete are set, may use streaming."""
+        """Return generated text. When on_token/on_complete/on_chunk are set, uses streaming.
+
+        on_chunk(text) is called with each text fragment as it arrives.
+        It may be a plain callable or an async coroutine function.
+        """
         pass
 
 
@@ -60,6 +65,7 @@ class SmokeTestClient(AIClient):
         on_token: Optional[Callable[[int], None]] = None,
         on_complete: Optional[Callable[[int, float], None]] = None,
         params: Optional[dict[str, Any]] = None,
+        on_chunk: Optional[Callable[[str], Any]] = None,
     ) -> str:
         _ = (system_prompt, max_tokens, params)
         await asyncio.sleep(0)
@@ -92,6 +98,7 @@ class OllamaClient(AIClient):
         on_token: Optional[Callable[[int], None]] = None,
         on_complete: Optional[Callable[[int, float], None]] = None,
         params: Optional[dict[str, Any]] = None,
+        on_chunk: Optional[Callable[[str], Any]] = None,
     ) -> str:
         # NOTE: ollama python client raises ResponseError for HTTP failures.
         # We translate "model not found" into a helpful actionable message.
@@ -122,8 +129,14 @@ class OllamaClient(AIClient):
         # -1 = keep forever. Pass as a param override from the caller.
         keep_alive = params.get("keep_alive", None)  # None → Ollama uses its own default
 
+        async def _call_on_chunk(text: str) -> None:
+            if on_chunk:
+                result = on_chunk(text)
+                if asyncio.iscoroutine(result):
+                    await result
+
         try:
-            if on_token is not None or on_complete is not None:
+            if on_token is not None or on_complete is not None or on_chunk is not None:
                 start = time.monotonic()
                 total_tokens = 0
                 content_parts = []
@@ -141,6 +154,7 @@ class OllamaClient(AIClient):
                         total_tokens += tok
                         if on_token:
                             on_token(total_tokens)
+                        await _call_on_chunk(part)
                 elapsed = time.monotonic() - start
                 if on_complete:
                     on_complete(total_tokens, elapsed)
@@ -210,6 +224,7 @@ class DeepSeekClient(AIClient):
         on_token: Optional[Callable[[int], None]] = None,
         on_complete: Optional[Callable[[int, float], None]] = None,
         params: Optional[dict[str, Any]] = None,
+        on_chunk: Optional[Callable[[str], Any]] = None,
     ) -> str:
         if not (self._config.DEEPSEEK_API_KEY or "").strip():
             raise RuntimeError(
@@ -236,10 +251,16 @@ class DeepSeekClient(AIClient):
             "model": self._model,
             "messages": messages,
             "temperature": float(params.get("temperature", 0.3)),
-            "stream": on_token is not None or on_complete is not None,
+            "stream": on_token is not None or on_complete is not None or on_chunk is not None,
         }
         if max_tokens is not None:
             kwargs["max_tokens"] = max_tokens
+
+        async def _call_on_chunk(text: str) -> None:
+            if on_chunk:
+                result = on_chunk(text)
+                if asyncio.iscoroutine(result):
+                    await result
 
         if kwargs["stream"]:
             start = time.monotonic()
@@ -250,13 +271,21 @@ class DeepSeekClient(AIClient):
                 delta = (chunk.choices[0].delta if chunk.choices else None) or None
                 if not delta:
                     continue
-                # Standard models: delta.content. Reasoner (deepseek-reasoner): delta.reasoning_content (thinking) and delta.content (answer).
-                part = (getattr(delta, "content", None) or "") + (getattr(delta, "reasoning_content", None) or "")
-                if part:
-                    content_parts.append(part)
-                    total_tokens += max(1, _estimate_tokens(part))
+                # Standard models: delta.content.
+                # Reasoner (deepseek-reasoner): delta.reasoning_content (thinking) + delta.content (answer).
+                content_part = getattr(delta, "content", None) or ""
+                reasoning_part = getattr(delta, "reasoning_content", None) or ""
+                # Accumulate both for the final result (thinking will be stripped later).
+                full_part = content_part + reasoning_part
+                if full_part:
+                    content_parts.append(full_part)
+                    total_tokens += max(1, _estimate_tokens(full_part))
                     if on_token:
                         on_token(total_tokens)
+                # Only forward the answer content (not reasoning) to the chunk callback,
+                # so the streamed display matches the final stored text.
+                if content_part:
+                    await _call_on_chunk(content_part)
             elapsed = time.monotonic() - start
             if on_complete:
                 on_complete(total_tokens, elapsed)
@@ -338,7 +367,10 @@ def get_ai_client_for_model_id(model_id: str, config: Settings) -> tuple[AIClien
         client = DeepSeekClient(config, model_override=rest)
         return client, f"DeepSeek/{rest}"
 
-    raise ValueError(f"Unsupported model_id prefix: {prefix}")
+    # Unknown prefix — treat the whole model_id as a bare Ollama tag
+    # (e.g. "llama3:latest", "mistral:7b", "qwen2.5-coder:32b").
+    client = OllamaClient(config, model_override=mid)
+    return client, mid
 
 
 async def call_with_fallback(

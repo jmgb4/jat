@@ -56,6 +56,18 @@ class HistoryStore:
                 )
                 """
             )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS interview_preps (
+                  job_key TEXT NOT NULL,
+                  version INTEGER NOT NULL,
+                  created_at REAL,
+                  prep_md TEXT,
+                  model_sequence_json TEXT,
+                  PRIMARY KEY(job_key, version)
+                )
+                """
+            )
             con.commit()
         finally:
             con.close()
@@ -226,6 +238,73 @@ class HistoryStore:
                 (job_key,),
             )
             return [dict(r) for r in cur.fetchall()]
+        finally:
+            con.close()
+
+    # ------------------------------------------------------------------ #
+    # Interview prep helpers                                               #
+    # ------------------------------------------------------------------ #
+
+    def next_prep_version(self, job_key: str) -> int:
+        con = self._connect()
+        try:
+            cur = con.cursor()
+            cur.execute(
+                "SELECT COALESCE(MAX(version), 0) AS v FROM interview_preps WHERE job_key = ?",
+                (job_key,),
+            )
+            row = cur.fetchone()
+            return int(row["v"] if row else 0) + 1
+        finally:
+            con.close()
+
+    def store_interview_prep(
+        self,
+        *,
+        job_key: str,
+        prep_md: str,
+        model_sequence_json: str | None = None,
+    ) -> int:
+        """Insert a new interview prep document and return its version number."""
+        version = self.next_prep_version(job_key)
+        con = self._connect()
+        try:
+            cur = con.cursor()
+            cur.execute(
+                "INSERT INTO interview_preps(job_key, version, created_at, prep_md, model_sequence_json) "
+                "VALUES(?,?,?,?,?)",
+                (job_key, version, time.time(), prep_md, model_sequence_json),
+            )
+            con.commit()
+            return version
+        finally:
+            con.close()
+
+    def list_interview_preps(self, job_key: str) -> list[dict[str, Any]]:
+        """Return all prep records for a job (no prep_md), newest first."""
+        con = self._connect()
+        try:
+            cur = con.cursor()
+            cur.execute(
+                "SELECT version, created_at, model_sequence_json "
+                "FROM interview_preps WHERE job_key = ? ORDER BY version DESC",
+                (job_key,),
+            )
+            return [dict(r) for r in cur.fetchall()]
+        finally:
+            con.close()
+
+    def get_interview_prep(self, job_key: str, version: int) -> Optional[dict[str, Any]]:
+        """Return the full prep record including prep_md."""
+        con = self._connect()
+        try:
+            cur = con.cursor()
+            cur.execute(
+                "SELECT * FROM interview_preps WHERE job_key = ? AND version = ?",
+                (job_key, version),
+            )
+            r = cur.fetchone()
+            return dict(r) if r else None
         finally:
             con.close()
 

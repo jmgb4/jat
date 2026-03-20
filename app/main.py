@@ -18,6 +18,7 @@ from sse_starlette.sse import EventSourceResponse, ServerSentEvent
 
 from app.ai_client import get_ai_client_for_model_id
 from app.config import get_context_window, get_settings
+from app.interview_builder import generate_interview_prep, run_pass1, run_pass2
 from app.context_manager import prepare_context
 from app.cover_builder import generate_cover_letter
 from app.docx_parser import extract_text_from_docx
@@ -47,6 +48,51 @@ if sys.platform.startswith("win"):
 jobs: Dict[str, Dict[str, Any]] = {}
 # Optional job queue: process jobs sequentially (maxsize 10)
 job_queue: asyncio.Queue = asyncio.Queue(maxsize=10)
+
+# ---------------------------------------------------------------------------
+# In-process caches — avoids re-reading unchanged files on every job
+# ---------------------------------------------------------------------------
+_context_files_cache: Dict[str, Any] | None = None
+_context_files_cache_dir: str = ""
+_resume_text_cache: Dict[str, tuple] = {}  # path -> (mtime, text)
+
+
+def _get_context_files(context_dir: Path) -> Dict[str, Any]:
+    """Return context files dict, re-reading from disk only when the directory path changes."""
+    global _context_files_cache, _context_files_cache_dir
+    key = str(context_dir)
+    if _context_files_cache is None or _context_files_cache_dir != key:
+        _context_files_cache = load_context_files(context_dir)
+        _context_files_cache_dir = key
+    return _context_files_cache
+
+
+def _get_resume_text(path: Path) -> str:
+    """Return extracted DOCX/TXT text, re-parsing only when the file's mtime changes."""
+    key = str(path)
+    try:
+        mtime = path.stat().st_mtime
+    except OSError:
+        mtime = -1.0
+    cached = _resume_text_cache.get(key)
+    if cached is not None and cached[0] == mtime:
+        return cached[1]
+    text = extract_text_from_docx(path)
+    _resume_text_cache[key] = (mtime, text)
+    return text
+
+
+def _all_deepseek(steps: list | None) -> bool:
+    """Return True only when every step in the list uses the DeepSeek API.
+
+    Local Ollama pipelines use keep_alive=0 (evict_between_steps), so running
+    two pipelines concurrently causes the model to be reloaded after every
+    single step — significantly slower than sequential execution.  Parallelism
+    is therefore only safe when all steps are stateless DeepSeek API calls.
+    """
+    if not steps:
+        return False
+    return all((s.get("model_id") or "").startswith("deepseek:") for s in steps)
 
 app = FastAPI(title="Job Application Tailor", version="0.1.0")
 config = get_settings()
@@ -249,7 +295,7 @@ async def process_job(
         context_dir = Path(config.CONTEXT_DIR)
         if not context_dir.is_absolute():
             context_dir = Path(__file__).parent.parent / context_dir
-        context_files = load_context_files(context_dir)
+        context_files = _get_context_files(context_dir)
 
         # Optional pipeline preset (server-side)
         pipeline = None
@@ -323,12 +369,12 @@ async def process_job(
             if info.role_based and info.leadership_path and info.engineering_path:
                 role = classify_role(title, job_desc, parsed_job_json)
                 if role == "leadership":
-                    base_resume = extract_text_from_docx(info.leadership_path)
+                    base_resume = _get_resume_text(info.leadership_path)
                 elif role == "engineering":
-                    base_resume = extract_text_from_docx(info.engineering_path)
+                    base_resume = _get_resume_text(info.engineering_path)
                 else:
-                    text_lead = extract_text_from_docx(info.leadership_path)
-                    text_eng = extract_text_from_docx(info.engineering_path)
+                    text_lead = _get_resume_text(info.leadership_path)
+                    text_eng = _get_resume_text(info.engineering_path)
                     base_resume = "[LEADERSHIP EXPERIENCE]\n" + text_lead + "\n\n[ENGINEERING EXPERIENCE]\n" + text_eng
                     if len(base_resume) > 40000:
                         base_resume = base_resume[:40000]
@@ -338,7 +384,7 @@ async def process_job(
                     base_resume_path = Path(config.BASE_RESUME_PATH)
                     if not base_resume_path.is_absolute():
                         base_resume_path = project_root / base_resume_path
-                base_resume = extract_text_from_docx(base_resume_path)
+                base_resume = _get_resume_text(base_resume_path)
         except FileNotFoundError:
             jobs[job_id]["status"] = "error"
             jobs[job_id]["message"] = (
@@ -389,26 +435,71 @@ async def process_job(
             evt["phase"] = "Cover letter"
             await push_stats(evt)
 
-        final_resume, resume_suggestions = await generate_resume(
-            job_desc, job_folder, config, base_resume, context_files, combined_context,
-            progress_callback=_resume_progress,
-            ollama_model_override=ollama_model,
-            use_deepseek=use_deepseek,
-            model_sequence=model_sequence,
-            parallel_flags=parallel_flags,
-            pipeline_steps=(_p_steps),
-            parsed_job_json=parsed_job_json,
+        # Decide whether to run resume and cover letter concurrently.
+        # Parallel is only safe for pure DeepSeek pipelines: DeepSeek calls are stateless
+        # HTTP requests that can overlap freely.  Local Ollama pipelines use keep_alive=0
+        # (evict_between_steps), which unloads the model from VRAM after every step.
+        # Running two Ollama pipelines concurrently causes constant evict/reload cycles —
+        # each step in one pipeline evicts the model just as the other needs it, turning a
+        # 2-minute job into a 15+ minute hang.
+        _use_parallel = (
+            (_p_steps and _c_steps and _all_deepseek(_p_steps) and _all_deepseek(_c_steps))
+            or (
+                not (_p_steps or _c_steps)
+                and (
+                    use_deepseek is True
+                    or (
+                        model_sequence
+                        and all((m or "").startswith("deepseek:") for m in model_sequence)
+                    )
+                )
+            )
         )
-        final_cover, cover_suggestions = await generate_cover_letter(
-            job_desc, title, job_folder, config, base_resume, context_files, combined_context,
-            progress_callback=_cover_progress,
-            ollama_model_override=ollama_model,
-            use_deepseek=use_deepseek,
-            model_sequence=model_sequence,
-            parallel_flags=parallel_flags,
-            pipeline_steps=(_c_steps),
-            parsed_job_json=parsed_job_json,
-        )
+
+        if _use_parallel:
+            (final_resume, resume_suggestions), (final_cover, cover_suggestions) = await asyncio.gather(
+                generate_resume(
+                    job_desc, job_folder, config, base_resume, context_files, combined_context,
+                    progress_callback=_resume_progress,
+                    ollama_model_override=ollama_model,
+                    use_deepseek=use_deepseek,
+                    model_sequence=model_sequence,
+                    parallel_flags=parallel_flags,
+                    pipeline_steps=(_p_steps),
+                    parsed_job_json=parsed_job_json,
+                ),
+                generate_cover_letter(
+                    job_desc, title, job_folder, config, base_resume, context_files, combined_context,
+                    progress_callback=_cover_progress,
+                    ollama_model_override=ollama_model,
+                    use_deepseek=use_deepseek,
+                    model_sequence=model_sequence,
+                    parallel_flags=parallel_flags,
+                    pipeline_steps=(_c_steps),
+                    parsed_job_json=parsed_job_json,
+                ),
+            )
+        else:
+            final_resume, resume_suggestions = await generate_resume(
+                job_desc, job_folder, config, base_resume, context_files, combined_context,
+                progress_callback=_resume_progress,
+                ollama_model_override=ollama_model,
+                use_deepseek=use_deepseek,
+                model_sequence=model_sequence,
+                parallel_flags=parallel_flags,
+                pipeline_steps=(_p_steps),
+                parsed_job_json=parsed_job_json,
+            )
+            final_cover, cover_suggestions = await generate_cover_letter(
+                job_desc, title, job_folder, config, base_resume, context_files, combined_context,
+                progress_callback=_cover_progress,
+                ollama_model_override=ollama_model,
+                use_deepseek=use_deepseek,
+                model_sequence=model_sequence,
+                parallel_flags=parallel_flags,
+                pipeline_steps=(_c_steps),
+                parsed_job_json=parsed_job_json,
+            )
 
         jobs[job_id]["status"] = "complete"
         jobs[job_id]["progress"] = None
@@ -503,7 +594,7 @@ async def job_page(request: Request, job_id: str):
     return templates.TemplateResponse(
         request=request,
         name="result.html",
-        context={"request": request, "job_id": job_id, "job_title": jobs[job_id].get("job_title")},
+        context={"request": request, "job_id": job_id, "job_title": jobs[job_id].get("job_title"), "job_url": jobs[job_id].get("url", "")},
     )
 
 
@@ -944,6 +1035,162 @@ async def history_oneup(payload: dict):
     await job_queue.put((job_id, url, req))
     await stats_queue.put({"status": "pending", "log": f"Queued (position {queue_position})", "queue_position": queue_position})
     return {"job_id": job_id}
+
+
+# ---------------------------------------------------------------------------
+# Interview prep routes
+# ---------------------------------------------------------------------------
+
+async def _run_interview_prep(job_id: str, job_key: str, job_desc: str, base_resume: str, context_text: str, model_sequence: list, stats_queue: asyncio.Queue, extra_context: str = "") -> None:
+    """Background task: two-pass interview prep with real-time step progress via SSE."""
+    import json as _json
+
+    async def push(evt: dict) -> None:
+        jobs[job_id]["stats"] = {**jobs[job_id].get("stats", {}), **evt}
+        await stats_queue.put(dict(evt))
+
+    reasoner_model = model_sequence[0] if model_sequence else config.OLLAMA_MODEL
+    chat_model = model_sequence[1] if len(model_sequence) > 1 else reasoner_model
+
+    jobs[job_id]["status"] = "generating"
+    try:
+        # ── Pass 1: Reasoner ──────────────────────────────────────────────
+        await push({
+            "status": "generating",
+            "step": 1,
+            "log": f"Pass 1 — Analyzing job requirements with {reasoner_model.split(':')[-1]}…",
+        })
+
+        async def on_chunk_pass1(text: str) -> None:
+            await push({"chunk": text, "step": 1})
+
+        analysis = await run_pass1(
+            job_description=job_desc,
+            base_resume=base_resume,
+            context_text=context_text,
+            model_id=reasoner_model,
+            on_chunk=on_chunk_pass1,
+            extra_context=extra_context,
+        )
+
+        # ── Pass 2: Chat / Polish ─────────────────────────────────────────
+        # "clear" tells the frontend to wipe the viewer before the final pass streams in.
+        await push({
+            "status": "generating",
+            "step": 2,
+            "clear": True,
+            "log": f"Pass 2 — Writing prep document with {chat_model.split(':')[-1]}…",
+        })
+
+        async def on_chunk_pass2(text: str) -> None:
+            await push({"chunk": text, "step": 2})
+
+        prep_md = await run_pass2(
+            analysis=analysis,
+            job_description=job_desc,
+            context_text=context_text,
+            model_id=chat_model,
+            on_chunk=on_chunk_pass2,
+        )
+
+        # ── Store ─────────────────────────────────────────────────────────
+        version = history.store_interview_prep(
+            job_key=job_key,
+            prep_md=prep_md,
+            model_sequence_json=_json.dumps(model_sequence),
+        )
+        jobs[job_id]["status"] = "complete"
+        jobs[job_id]["interview_prep_version"] = version
+        await push({
+            "status": "complete",
+            "step": 2,
+            "log": f"Interview prep ready (version {version})",
+            "interview_prep_version": version,
+        })
+    except Exception as exc:
+        logger.exception("interview_prep job=%s failed: %s", job_id, exc)
+        jobs[job_id]["status"] = "error"
+        jobs[job_id]["message"] = str(exc)
+        await push({"status": "error", "message": str(exc)})
+
+
+@app.post("/api/history/interview-prep", response_model=dict)
+async def history_start_interview_prep(payload: dict):
+    """Trigger async interview prep generation for a historical job."""
+    job_key = str((payload or {}).get("job_key") or "").strip()
+    model_sequence = (payload or {}).get("model_sequence") or []
+    extra_context = str((payload or {}).get("extra_context") or "").strip()
+    if not job_key:
+        raise HTTPException(status_code=400, detail="job_key is required")
+
+    job = history.get_job(job_key)
+    if not job:
+        raise HTTPException(status_code=404, detail="job_key not found")
+
+    job_desc = str(job.get("job_description") or "").strip()
+    if not job_desc:
+        raise HTTPException(status_code=400, detail="No job description stored for this job; re-run the tailor first")
+
+    # Load base resume text
+    project_root = Path(__file__).parent.parent
+    base_dir = project_root / "data" / "base_resume"
+    info = resolve_base_resume(base_dir, project_root, config)
+    base_resume_text = ""
+    if info.selected_path and Path(info.selected_path).exists():
+        try:
+            base_resume_text = extract_text_from_docx(info.selected_path)
+        except Exception:
+            pass
+
+    # Load context files
+    context_dir = Path(config.CONTEXT_DIR)
+    if not context_dir.is_absolute():
+        context_dir = project_root / context_dir
+    context_files = load_context_files(context_dir)
+    context_text = "\n\n".join(f"### {k}\n{v}" for k, v in context_files.items() if v.strip())
+
+    if not model_sequence:
+        model_sequence = [config.OLLAMA_MODEL, config.OLLAMA_MODEL]
+
+    job_id = str(uuid.uuid4())[:8]
+    stats_queue: asyncio.Queue = asyncio.Queue()
+    jobs[job_id] = {
+        "job_id": job_id,
+        "status": "pending",
+        "progress": None,
+        "message": None,
+        "url": str(job.get("url") or ""),
+        "created_at": time.time(),
+        "stats_queue": stats_queue,
+        "stats": {},
+    }
+    await stats_queue.put({"status": "pending", "log": "Interview prep queued"})
+    asyncio.create_task(
+        _run_interview_prep(job_id, job_key, job_desc, base_resume_text, context_text, model_sequence, stats_queue, extra_context=extra_context)
+    )
+    return {"job_id": job_id}
+
+
+@app.get("/api/history/{job_key}/interview-preps", response_model=dict)
+async def history_list_interview_preps(job_key: str):
+    """List all interview prep versions for a job."""
+    j = history.get_job(job_key)
+    if not j:
+        raise HTTPException(status_code=404, detail="not found")
+    return {
+        "job_key": job_key,
+        "job_title": j.get("job_title"),
+        "preps": history.list_interview_preps(job_key),
+    }
+
+
+@app.get("/api/history/{job_key}/interview-prep/{version}", response_model=dict)
+async def history_get_interview_prep(job_key: str, version: int):
+    """Return the full content of a specific interview prep version."""
+    p = history.get_interview_prep(job_key, version)
+    if not p:
+        raise HTTPException(status_code=404, detail="not found")
+    return p
 
 
 @app.post("/api/models/show", response_model=dict)

@@ -6,6 +6,31 @@
 #    language and ensure relevant terms appear naturally in the output.
 #    Be specific — "Nessus" is better than "vulnerability scanner".
 # ─────────────────────────────────────────────────────────────────────────────
+#
+# ── FILLED-IN EXAMPLE (cybersecurity engineer) ───────────────────────────────
+# The block below shows what a completed file looks like.
+# Replace everything with your own tools and roles.
+#
+# ## Tools and Platforms
+# Qualys, Nessus, Tenable.io, Splunk, CrowdStrike Falcon, AWS Security Hub,
+# Jira, Confluence, Python, Bash, Terraform, Git
+#
+# ## Techniques and Practices
+# Vulnerability management, patch prioritization, threat modeling,
+# CVSS scoring, incident response, security automation, red/blue team exercises,
+# security code review, cloud security posture management (CSPM)
+#
+# ## Compliance and Frameworks
+# NIST CSF, SOC 2 Type II, ISO 27001, FedRAMP Moderate, CIS Benchmarks
+#
+# ## Soft Skills
+# Cross-team collaboration, technical writing, stakeholder management,
+# mentoring junior engineers
+#
+# ## Target Roles
+# Security Engineer, Vulnerability Management Engineer,
+# Cloud Security Engineer, Detection Engineer
+# ─────────────────────────────────────────────────────────────────────────────
 
 ## Tools and Platforms
 [Tool 1], [Tool 2], [Cloud provider, e.g. AWS / Azure / GCP],

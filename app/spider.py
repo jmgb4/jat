@@ -21,6 +21,23 @@ PLAYWRIGHT_NOT_INSTALLED_MSG = (
 )
 
 
+# ATS domains that need extra JS-render wait time
+_SLOW_ATS_DOMAINS = (
+    "myworkdayjobs.com",
+    "greenhouse.io",
+    "lever.co",
+    "icims.com",
+    "taleo.net",
+    "successfactors.com",
+    "smartrecruiters.com",
+)
+
+
+def _is_slow_ats(url: str) -> bool:
+    url_lower = url.lower()
+    return any(domain in url_lower for domain in _SLOW_ATS_DOMAINS)
+
+
 # Selectors for common job boards, ATS/vendor sites, and generic fallback
 JOB_SELECTORS = [
     # LinkedIn
@@ -30,6 +47,10 @@ JOB_SELECTORS = [
     # Indeed
     "#jobDescriptionText",
     ".jobsearch-JobComponent-description",
+    # Workday ATS (data-automation-id attributes)
+    "[data-automation-id='jobPostingDescription']",
+    "[data-automation-id='jobPostingDescriptionText']",
+    "[data-automation-id='job-description']",
     # ATS / vendor pages (Greenhouse, Lever, Workday, etc.)
     "[data-qa='job-description']",
     "[data-qa='job-description-content']",
@@ -62,7 +83,6 @@ def _scrape_job_sync(url: str, job_folder: Path | None, timeout_ms: int) -> dict
         raise RuntimeError(PLAYWRIGHT_NOT_INSTALLED_MSG)
     if job_folder is not None:
         job_folder = Path(job_folder).resolve()
-    screenshot_path = None
     title = ""
     description = ""
 
@@ -82,7 +102,23 @@ def _scrape_job_sync(url: str, job_folder: Path | None, timeout_ms: int) -> dict
                 page.wait_for_load_state("load", timeout=8000)
             except Exception:
                 pass
-            time.sleep(0.3)
+
+            # For heavy JS/ATS sites give the SPA extra time to render.
+            # Workday uses data-automation-id; wait for it specifically then sleep.
+            # Other slow-ATS domains (Greenhouse, Lever, iCIMS…) just need the extra sleep.
+            if "myworkdayjobs.com" in url.lower():
+                try:
+                    page.wait_for_selector(
+                        "[data-automation-id='jobPostingDescription']",
+                        timeout=12000,
+                    )
+                except Exception:
+                    pass
+                time.sleep(2.0)
+            elif _is_slow_ats(url):
+                time.sleep(2.0)
+            else:
+                time.sleep(0.3)
 
             # Try to get title from page
             title = page.title() or ""
@@ -116,9 +152,6 @@ def _scrape_job_sync(url: str, job_folder: Path | None, timeout_ms: int) -> dict
 
             if job_folder:
                 job_folder.mkdir(parents=True, exist_ok=True)
-                screenshot_path = job_folder / "screenshot.png"
-                page.screenshot(path=str(screenshot_path), full_page=False)
-                screenshot_path = str(screenshot_path)
 
                 # Save the entire job posting page as HTML.
                 try:
@@ -127,8 +160,7 @@ def _scrape_job_sync(url: str, job_folder: Path | None, timeout_ms: int) -> dict
                 except Exception as e:
                     logger.warning("HTML save failed for %s: %s", url, e)
 
-                # Save the job posting as a PDF for later reference (after page is fully loaded).
-                time.sleep(0.2)
+                # Save the job posting as a PDF for later reference.
                 try:
                     pdf_path = job_folder / "job_posting.pdf"
                     page.emulate_media(media="print")
@@ -150,14 +182,13 @@ def _scrape_job_sync(url: str, job_folder: Path | None, timeout_ms: int) -> dict
         "url": url,
         "title": title or url,
         "description": description,
-        "screenshot_path": screenshot_path,
     }
 
 
 async def scrape_job(url: str, job_folder: str | Path | None = None, timeout_ms: int = 30000) -> dict[str, Any]:
     """
-    Navigate to job URL, extract title and description, optionally save screenshot.
-    Returns dict with url, title, description, screenshot_path (or None).
+    Navigate to job URL, extract title and description. Saves HTML and PDF to job_folder if provided.
+    Returns dict with url, title, description.
     """
     job_folder_path = Path(job_folder) if job_folder else None
     return await asyncio.to_thread(_scrape_job_sync, url, job_folder_path, timeout_ms)
