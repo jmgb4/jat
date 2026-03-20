@@ -35,7 +35,7 @@ Runs fully offline with [Ollama](https://ollama.com/). DeepSeek API is optional.
 ```powershell
 # 1. Clone and set up
 git clone https://github.com/jmgb4/jat.git
-cd job_app_tailor
+cd jat
 .\setup.ps1           # creates venv, installs deps, installs Playwright Chromium
 
 # 2. Configure
@@ -168,7 +168,7 @@ If you have multiple resume files in `data/base_resume/`, the app detects the jo
 | Script | Purpose | When to run |
 |--------|---------|-------------|
 | `setup.ps1` | Create venv, install dependencies, install Playwright Chromium | First-time setup |
-| `run.ps1` | Start the web app (`uvicorn`). Set `\=1` before running to disable hot-reload (recommended for batch jobs or stable sessions) | Every session |
+| `run.ps1` | Start the web app (`uvicorn`). Set `$env:JAT_NO_RELOAD=1` before running to disable hot-reload (recommended for batch jobs or stable sessions) | Every session |
 | `commit-build.ps1` | Commit all changes and push to GitHub | After code changes |
 | `fix_ollama.ps1` | Diagnose Ollama, pull primary model from `.env` | When Ollama or GPU models need checking |
 | `download_pass_models.ps1` | Download GGUF models used by the pipeline | When you want local GGUF models |
@@ -187,7 +187,7 @@ If you have multiple resume files in `data/base_resume/`, the app detects the jo
 ## Project Structure
 
 ```
-job_app_tailor/
+jat/
 ├── app/
 │   ├── main.py              # FastAPI routes and background job runner
 │   ├── spider.py            # Playwright scraping
