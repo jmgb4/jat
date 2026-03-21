@@ -62,14 +62,14 @@ def _load_llama(path: str, config: Settings, overrides: Optional[dict[str, Any]]
         # On Windows, a partially-installed wheel or missing VC++ runtime can surface as a DLL load failure.
         msg = (
             "Failed to import llama-cpp-python runtime.\n\n"
-            "Most likely cause on Windows: missing 'llama.dll' in your venv or a missing dependency.\n"
-            "Expected path:\n"
-            "  venv\\Lib\\site-packages\\llama_cpp\\lib\\llama.dll\n\n"
+            "Most likely cause: missing llama-cpp runtime library in your virtual environment or a missing dependency.\n"
+            "Expected location (platform-specific filename):\n"
+            "  venv/.../site-packages/llama_cpp/lib/\n\n"
             "Fix:\n"
-            "  1) From the project root, run: .\\setup.ps1\n"
+            "  1) From the project root, run: python scripts/jat.py setup\n"
             "  2) Or reinstall the package:\n"
-            "     .\\venv\\Scripts\\pip.exe uninstall -y llama-cpp-python\n"
-            "     .\\venv\\Scripts\\pip.exe install -r requirements.txt\n\n"
+            "     python -m pip uninstall -y llama-cpp-python\n"
+            "     python -m pip install -r requirements.txt\n\n"
             "If it worked previously, check whether antivirus quarantined the DLL or the install was interrupted."
         )
         raise RuntimeError(msg) from e
@@ -92,8 +92,8 @@ def _load_llama(path: str, config: Settings, overrides: Optional[dict[str, Any]]
                 "Fix:\n"
                 "1) Reinstall CUDA-enabled llama-cpp-python (cu121) from requirements.txt\n"
                 "2) Ensure CUDA 12.x runtime DLLs are available (common missing DLLs: cublas64_12.dll, cublasLt64_12.dll, cudart64_12.dll)\n"
-                "3) Re-run .\\setup.ps1, then verify with:\n"
-                "   .\\venv\\Scripts\\python.exe -c \"from llama_cpp import llama_cpp as lc; print(lc.llama_supports_gpu_offload())\""
+                "3) Re-run python scripts/jat.py setup, then verify with:\n"
+                "   python -c \"from llama_cpp import llama_cpp as lc; print(lc.llama_supports_gpu_offload())\""
             )
 
     gguf = str(Path(path))
