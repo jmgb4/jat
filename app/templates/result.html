@@ -504,7 +504,7 @@
                 else setTimeout(function() { es = new EventSource(streamUrl); }, 2000);
             })
             .catch(function() {
-                showError('Connection lost. Check that the server is still running (e.g. run .\\run.ps1) and try refreshing the page.');
+                showError('Connection lost. Check that the server is still running (e.g. run python scripts/jat.py run) and try refreshing the page.');
             });
     };
 

@@ -203,7 +203,7 @@ async def _run_single_step(
                         "log": (
                             f"GGUF unavailable for step '{step.name}' "
                             f"({type(e).__name__}: {e}) — falling back to {fallback_mid}. "
-                            f"Run .\\setup.ps1 to restore GPU support."
+                            f"Run python scripts/jat.py setup to restore runtime support."
                         ),
                     }
                 )
