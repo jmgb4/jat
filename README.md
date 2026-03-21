@@ -39,7 +39,10 @@ cd jat
 python scripts/jat.py setup
 
 # 2. Configure
-copy .env.example .env
+# macOS / Linux:
+cp .env.example .env
+# Windows PowerShell:
+# copy .env.example .env
 # Edit .env: set OLLAMA_MODEL to a model you have pulled
 
 # 3. Add your data (see Data Files Setup below)
@@ -167,9 +170,12 @@ If you have multiple resume files in `data/base_resume/`, the app detects the jo
 
 | Script | Purpose | When to run |
 |--------|---------|-------------|
-| `python scripts/jat.py setup` | Create venv, install dependencies, install Playwright Chromium | First-time setup |
+| `python scripts/jat.py setup` | Create venv, install base dependencies, then install optional GPU stack per OS/GPU availability | First-time setup |
 | `python scripts/jat.py run` | Start the web app (`uvicorn`). Set `JAT_NO_RELOAD=1` to disable hot-reload | Every session |
+| `python scripts/jat.py run --skip-gpu-check` | Start app without startup GPU probe (useful while gaming / on CPU-only sessions) | Optional runtime mode |
 | `python scripts/jat.py test` | Run unit tests | During development |
+| `python scripts/jat.py gpu-check` | Print GPU/runtime readiness summary | Diagnostics |
+| `python scripts/jat.py download-pass-models` | Download and register GGUF pass models | Model setup |
 | `setup.ps1` | Create venv, install dependencies, install Playwright Chromium | First-time setup |
 | `run.ps1` | Windows convenience wrapper for `python scripts/jat.py run` | Windows only |
 | `commit-build.ps1` | Commit all changes and push to GitHub | After code changes |
@@ -211,6 +217,11 @@ jat/
 │   ├── jobs/                # Per-job output folders (gitignored)
 │   └── pipelines/           # Saved pipeline configurations
 ├── .env.example             # Configuration template — copy to .env
+├── requirements/
+│   ├── base.txt
+│   ├── gpu-windows.txt
+│   ├── gpu-linux.txt
+│   └── gpu-macos.txt
 ├── requirements.txt
 ├── setup.ps1
 ├── run.ps1
@@ -226,7 +237,7 @@ jat/
 # Unit tests
 python scripts/jat.py test
 
-# E2E smoke test against a real job URL
+# E2E smoke test against a real job URL (Windows PowerShell helper)
 .\scripts\e2e_one_job.ps1
 ```
 
@@ -244,3 +255,4 @@ python scripts/jat.py test
 | Out of memory (OOM) / Ollama crashes | Lower `OLLAMA_NUM_GPU` in `.env` (e.g. `OLLAMA_NUM_GPU=20`) to keep some layers on CPU, or switch to a smaller quantisation (e.g. `Q4_K_M` instead of `Q8_0`) |
 | HuggingFace rate limits when downloading GGUF models | Set `HF_TOKEN` in `.env` with a free token from [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) |
 | App restarts unexpectedly while generating | Hot-reload is watching `app/` for changes. Set `JAT_NO_RELOAD=1` before `python scripts/jat.py run` to disable it |
+| I want to avoid GPU checks for this session | Run `python scripts/jat.py run --skip-gpu-check` |

@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install project (CPU-only)
+        run: python scripts/jat.py setup --cpu-only --skip-playwright
+
+      - name: Run tests
+        run: python scripts/jat.py test
+
+      - name: Validate launcher commands
+        run: |
+          python scripts/jat.py --help
+          python scripts/jat.py run --help
+          python scripts/jat.py test --help
+          python scripts/jat.py gpu-check
