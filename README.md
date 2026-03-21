@@ -32,11 +32,11 @@ Runs fully offline with [Ollama](https://ollama.com/). DeepSeek API is optional.
 
 ## Quick Start
 
-```powershell
+```bash
 # 1. Clone and set up
 git clone https://github.com/jmgb4/jat.git
 cd jat
-.\setup.ps1           # creates venv, installs deps, installs Playwright Chromium
+python scripts/jat.py setup
 
 # 2. Configure
 copy .env.example .env
@@ -45,7 +45,7 @@ copy .env.example .env
 # 3. Add your data (see Data Files Setup below)
 
 # 4. Run
-.\run.ps1
+python scripts/jat.py run
 # Open http://127.0.0.1:8000
 ```
 
@@ -167,8 +167,11 @@ If you have multiple resume files in `data/base_resume/`, the app detects the jo
 
 | Script | Purpose | When to run |
 |--------|---------|-------------|
+| `python scripts/jat.py setup` | Create venv, install dependencies, install Playwright Chromium | First-time setup |
+| `python scripts/jat.py run` | Start the web app (`uvicorn`). Set `JAT_NO_RELOAD=1` to disable hot-reload | Every session |
+| `python scripts/jat.py test` | Run unit tests | During development |
 | `setup.ps1` | Create venv, install dependencies, install Playwright Chromium | First-time setup |
-| `run.ps1` | Start the web app (`uvicorn`). Set `$env:JAT_NO_RELOAD=1` before running to disable hot-reload (recommended for batch jobs or stable sessions) | Every session |
+| `run.ps1` | Windows convenience wrapper for `python scripts/jat.py run` | Windows only |
 | `commit-build.ps1` | Commit all changes and push to GitHub | After code changes |
 | `fix_ollama.ps1` | Diagnose Ollama, pull primary model from `.env` | When Ollama or GPU models need checking |
 | `download_pass_models.ps1` | Download GGUF models used by the pipeline | When you want local GGUF models |
@@ -211,6 +214,7 @@ jat/
 ├── requirements.txt
 ├── setup.ps1
 ├── run.ps1
+├── scripts/jat.py
 └── README.md
 ```
 
@@ -218,9 +222,9 @@ jat/
 
 ## Running Tests
 
-```powershell
+```bash
 # Unit tests
-.\venv\Scripts\python.exe -m pytest tests/ -q
+python scripts/jat.py test
 
 # E2E smoke test against a real job URL
 .\scripts\e2e_one_job.ps1
@@ -234,9 +238,9 @@ jat/
 |---------|-----|
 | `Ollama is not running` / connection refused on startup | Run `ollama serve` in a separate terminal, then restart the app |
 | Model not found / 404 error from Ollama | `ollama pull <model-name>` then restart. Run `ollama list` to confirm the model name is exact |
-| Playwright / Chromium not found | `.\venv\Scripts\python.exe -m playwright install chromium` |
+| Playwright / Chromium not found | `python -m playwright install chromium` (or rerun `python scripts/jat.py setup`) |
 | "Job description too short or missing" on the result page | The site blocks headless browsers (common with Workday, iCIMS, Taleo). Use the paste box that appears on the result page — copy the full JD text and click **Retry with pasted description** |
 | Generation takes a very long time / seems stuck | Each pipeline pass loads the model fresh if eviction is enabled. Try: (1) reducing `OLLAMA_NUM_CTX` in `.env`, (2) using a smaller/faster model for the draft pass via the Sequencer, or (3) checking GPU utilisation with `nvidia-smi` |
 | Out of memory (OOM) / Ollama crashes | Lower `OLLAMA_NUM_GPU` in `.env` (e.g. `OLLAMA_NUM_GPU=20`) to keep some layers on CPU, or switch to a smaller quantisation (e.g. `Q4_K_M` instead of `Q8_0`) |
 | HuggingFace rate limits when downloading GGUF models | Set `HF_TOKEN` in `.env` with a free token from [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) |
-| App restarts unexpectedly while generating | Hot-reload is watching `app/` for changes. Set `$env:JAT_NO_RELOAD=1` before `.\run.ps1` to disable it |
+| App restarts unexpectedly while generating | Hot-reload is watching `app/` for changes. Set `JAT_NO_RELOAD=1` before `python scripts/jat.py run` to disable it |
