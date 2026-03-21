@@ -17,7 +17,7 @@ except ImportError as e:
 
 PLAYWRIGHT_NOT_INSTALLED_MSG = (
     "Playwright or Chromium is not installed. From the project folder run: "
-    ".\\venv\\Scripts\\python.exe -m playwright install chromium"
+    "python -m playwright install chromium (or run: python scripts/jat.py setup)"
 )
 
 
