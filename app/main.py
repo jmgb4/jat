@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import os
 import sys
 import time
 import uuid
@@ -686,6 +687,9 @@ async def startup_event() -> None:
     jobs_base = jobs_base.resolve()
     ensure_dir(jobs_base)
     logger.info("Job outputs will be saved under: %s", jobs_base)
+    if os.environ.get("JAT_SKIP_GPU_CHECK", "").strip().lower() in {"1", "true", "yes", "on"}:
+        logger.info("Startup GPU check skipped (JAT_SKIP_GPU_CHECK=1).")
+        return
     # Run GPU check at startup and log any issues so they appear in app.log.
     gpu_status = await _check_gpu_status()
     if gpu_status["ok"]:
