@@ -1,0 +1,16 @@
+{
+  "jobs": [
+    {
+      "id": "9d84dfc6-2e3e-4ea1-b05c-10e50c17985d",
+      "title": "Security Engineer",
+      "jobUrl": "https://jobs.ashbyhq.com/xbowcareers/9d84dfc6-2e3e-4ea1-b05c-10e50c17985d",
+      "descriptionPlain": "About the role\n\nWe are hiring a Security Engineer to improve application and infrastructure security.\n\nResponsibilities\n- Build automation for vulnerability validation.\n- Partner with engineering to reduce remediation time.\n\nRequirements\n- Experience with offensive security workflows.\n- Strong Python skills."
+    },
+    {
+      "id": "other-id",
+      "title": "Other Role",
+      "jobUrl": "https://jobs.ashbyhq.com/xbowcareers/other-id",
+      "descriptionPlain": "Other role description"
+    }
+  ]
+}
