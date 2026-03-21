@@ -257,6 +257,10 @@ async def process_job(
             scraped = await scrape_job(url, job_folder=job_folder, timeout_ms=config.SCRAPE_TIMEOUT * 1000)
             job_desc = scraped["description"]
             title = scraped.get("title") or extract_job_title_from_text(job_desc)
+            scrape_source = str(scraped.get("scrape_source") or "unknown")
+            scrape_meta = scraped.get("scrape_meta") if isinstance(scraped.get("scrape_meta"), dict) else {}
+            jobs[job_id]["scrape_source"] = scrape_source
+            jobs[job_id]["scrape_meta"] = scrape_meta
             if _is_job_unavailable(job_desc or ""):
                 jobs[job_id]["status"] = "error"
                 jobs[job_id]["message"] = "This job posting is no longer available."
@@ -284,7 +288,21 @@ async def process_job(
         min_desc_len = getattr(config, "MIN_JOB_DESCRIPTION_LENGTH", 0) or 0
         if min_desc_len > 0 and len((job_desc or "").strip()) < min_desc_len:
             jobs[job_id]["status"] = "error"
-            jobs[job_id]["message"] = "Job description is too short or missing."
+            scrape_source = str(jobs[job_id].get("scrape_source") or "unknown")
+            scrape_meta = jobs[job_id].get("scrape_meta") if isinstance(jobs[job_id].get("scrape_meta"), dict) else {}
+            char_count = int(scrape_meta.get("char_count") or len((job_desc or "").strip()))
+            method = str(scrape_meta.get("method") or scrape_source)
+            attempted = scrape_meta.get("attempted_sources")
+            attempted_txt = ""
+            if isinstance(attempted, list) and attempted:
+                attempted_txt = f"; attempted: {', '.join(str(x) for x in attempted)}"
+            jobs[job_id]["message"] = (
+                f"Job description is too short or missing (source: {method}, chars: {char_count}{attempted_txt})."
+            )
+            logger.warning(
+                "job=%s short description: source=%s method=%s chars=%s attempted=%s",
+                job_id, scrape_source, method, char_count, attempted,
+            )
             await push_stats({"status": "error", "message": jobs[job_id]["message"]})
             return
 
