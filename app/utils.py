@@ -170,6 +170,145 @@ def sanitise_resume_style(text: str) -> str:
     return "\n".join(result)
 
 
+def enforce_experience_bullets(text: str) -> str:
+    """
+    Ensure experience descriptions are markdown bullets.
+
+    This is resume-specific and should not be applied to cover letters.
+    Applies bullets only to achievement lines inside job blocks (after the
+    company/date line).  All other content — skills, education, certifications,
+    italic formatting, etc. — is left untouched.
+    """
+    if not text or not text.strip():
+        return ""
+
+    # Words that identify non-experience section headings.
+    # Matched as a prefix so "education and certifications", "technical skills",
+    # "skills & tools", etc. all resolve correctly regardless of trailing colon.
+    _SECTION_PREFIXES = (
+        "summary",
+        "technical",
+        "skill",
+        "education",
+        "certif",
+        "training",
+        "award",
+        "publication",
+        "project",
+        "volunteer",
+        "language",
+        "interest",
+        "profile",
+        "objective",
+        "about",
+        "competenc",
+        "qualif",
+    )
+
+    def _is_bold_heading(line: str) -> bool:
+        s = line.strip()
+        return bool(re.match(r"^\*\*.+\*\*:?\s*$", s))
+
+    def _heading_name(line: str) -> str:
+        """Return lower-case text content of a **bold** heading, without colon."""
+        s = line.strip()
+        s = re.sub(r"^\*\*", "", s)
+        s = re.sub(r"\*\*:?\s*$", "", s)
+        # Also strip a trailing colon that was *inside* the bold markers, e.g.
+        # **Technical Expertise:** → "Technical Expertise"
+        return s.strip().rstrip(":").lower()
+
+    def _is_section_heading(line: str) -> bool:
+        if not _is_bold_heading(line):
+            return False
+        name = _heading_name(line)
+        return any(name.startswith(prefix) for prefix in _SECTION_PREFIXES)
+
+    def _is_company_date_line(s: str) -> bool:
+        """Heuristic: company/date lines contain a pipe separator or a 4-digit year."""
+        if not s or s.startswith("**") or s.startswith("*"):
+            return False
+        has_pipe = bool(re.search(r"\s*[|·]\s*", s))
+        has_year = bool(re.search(r"\b(19|20)\d{2}\b", s))
+        return has_pipe or has_year
+
+    def _to_bullet(line: str) -> str:
+        s = line.strip()
+        if not s:
+            return ""
+        if s.startswith("• "):
+            return "* " + s[2:].strip()
+        if re.match(r"^-\s+", s):
+            return "* " + re.sub(r"^-\s+", "", s).strip()
+        if s.startswith("* "):
+            return "* " + s[2:].strip()
+        # Raw * bullet (no space) – strip the leading glyph.
+        if s.startswith("*") and not s.startswith("**"):
+            return "* " + s[1:].strip()
+        return "* " + s
+
+    lines = text.splitlines()
+    result: list[str] = []
+    # state: "outside" | "job_heading" | "job_body"
+    state = "outside"
+    # Lines collected after a job heading but before a confirmed company line.
+    # Flushed without bullets when a company line is found, or without change
+    # when the next heading arrives before a company line is found.
+    pending: list[str] = []
+
+    def flush_pending(as_bullets: bool) -> None:
+        for pl in pending:
+            result.append(_to_bullet(pl) if as_bullets else pl)
+        pending.clear()
+
+    for raw in lines:
+        line = raw.rstrip()
+        stripped = line.strip()
+
+        # Bold headings always take priority regardless of current state.
+        if _is_bold_heading(line):
+            flush_pending(as_bullets=(state == "job_body"))
+            result.append(stripped)
+            if _is_section_heading(line):
+                state = "outside"
+            else:
+                state = "job_heading"
+            continue
+
+        if state == "job_heading":
+            if not stripped:
+                continue  # skip blank lines while waiting for company/date
+            if _is_company_date_line(stripped):
+                # Lines collected before the company line (e.g. location/type)
+                # are emitted as plain metadata.
+                flush_pending(as_bullets=False)
+                result.append(stripped)
+                state = "job_body"
+            else:
+                # Could be location, employment type, etc. – hold and re-evaluate.
+                pending.append(stripped)
+            continue
+
+        if state == "job_body":
+            if not stripped:
+                continue  # collapse blank lines within a job block
+            result.append(_to_bullet(stripped))
+            continue
+
+        # state == "outside": pass through, only normalise explicit list markers.
+        # Deliberately does NOT touch inline italic text (*text* format) to avoid
+        # corrupting Technical Expertise / Skills sections.
+        if stripped.startswith("• ") or re.match(r"^-\s+", stripped):
+            result.append(_to_bullet(stripped))
+        elif stripped.startswith("* "):
+            result.append("* " + stripped[2:].strip())
+        else:
+            result.append(line)
+
+    flush_pending(as_bullets=(state == "job_body"))
+    return "\n".join(result).strip()
+
+
 def calculate_speed(start_time: float, tokens_generated: int) -> float:
     """Return tokens per second; 0 if no time elapsed or no tokens."""
     import time

@@ -18,7 +18,7 @@ from app.prompt_snippets import (
     STYLE_NO_OXFORD_DASHES,
     SUMMARY_THREE_LINES,
 )
-from app.utils import save_text_file, sanitise_resume_style
+from app.utils import enforce_experience_bullets, save_text_file, sanitise_resume_style
 
 logger = logging.getLogger(__name__)
 _RESUME_EMPTY_PLACEHOLDER = "# Resume\n\n(Pipeline returned no content for this run.)"
@@ -169,6 +169,7 @@ async def generate_resume(
             logger.warning("Resume pipeline returned empty content; writing placeholder to %s", final_path)
             final_text = _RESUME_EMPTY_PLACEHOLDER
         final_text = sanitise_resume_style(final_text)
+        final_text = enforce_experience_bullets(final_text)
         if getattr(config, "PERSONAL_FILL_ENABLED", True):
             from app.personal_fill import load_personal_vars, apply_personal_fill
             pvars = load_personal_vars(config)
@@ -397,6 +398,7 @@ async def generate_resume(
             logger.warning("Resume pipeline returned empty content; writing placeholder to %s", job_folder / "resume_final.md")
             final_resume = _RESUME_EMPTY_PLACEHOLDER
         final_resume = sanitise_resume_style(final_resume)
+        final_resume = enforce_experience_bullets(final_resume)
         if getattr(config, "PERSONAL_FILL_ENABLED", True):
             from app.personal_fill import load_personal_vars, apply_personal_fill
             pvars = load_personal_vars(config)
