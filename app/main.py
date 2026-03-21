@@ -644,13 +644,13 @@ async def _check_gpu_status() -> dict:
             warnings.append(
                 "llama-cpp-python is installed but reports NO GPU offload support. "
                 "This means GGUF models will run on CPU (extremely slow). "
-                "Run .\\setup.ps1 to reinstall the CUDA build."
+                "Run python scripts/jat.py setup to reinstall dependencies."
             )
     except Exception as e:
         details["llamacpp_import_error"] = str(e)
         warnings.append(
             f"llama-cpp-python failed to load ({type(e).__name__}): {e}. "
-            "GGUF models cannot run. Run .\\setup.ps1 to reinstall the CUDA build."
+            "GGUF models cannot run. Run python scripts/jat.py setup to reinstall dependencies."
         )
 
     # --- Check 3: NVIDIA GPU visible ---
@@ -694,7 +694,7 @@ async def startup_event() -> None:
         for w in gpu_status["warnings"]:
             logger.warning("GPU WARNING: %s", w)
         logger.warning(
-            "GPU issues detected at startup. Run .\\setup.ps1 to repair llama-cpp-python GPU build. "
+            "GPU issues detected at startup. Run python scripts/jat.py setup to repair runtime dependencies. "
             "Details: %s", gpu_status["details"]
         )
 
