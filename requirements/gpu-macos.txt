@@ -1,0 +1,3 @@
+# macOS uses Metal acceleration via the default torch wheels when available.
+torch
+torchvision
