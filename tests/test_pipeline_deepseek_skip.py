@@ -39,7 +39,16 @@ def test_deepseek_step_failure_is_skipped(monkeypatch):
     async def progress(evt):
         events.append(dict(evt))
 
-    cfg = type("Cfg", (), {})()
+    cfg = type(
+        "Cfg",
+        (),
+        {
+            "PIPELINE_RETRY_ATTEMPTS": 2,
+            "PIPELINE_RETRY_BACKOFF_SECONDS": 0.0,
+            "PIPELINE_FAIL_ON_CONTENT_SKIP": False,
+            "PIPELINE_FAIL_ON_ANY_SKIP": False,
+        },
+    )()
     steps = [
         PipelineStep(name="S1", model_id="ollama:step1", system_prompt="", prompt_template="{{input}}"),
         PipelineStep(name="S2", model_id="deepseek:deepseek-chat", system_prompt="", prompt_template="{{input}}"),
