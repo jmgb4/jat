@@ -6,13 +6,18 @@ Usage examples:
   python scripts/jat.py test
   python scripts/jat.py gpu-check
   python scripts/jat.py download-pass-models
+  python scripts/jat.py fix-ollama
+  python scripts/jat.py commit "optional message suffix"
 """
 
 from __future__ import annotations
 
 import argparse
+import datetime
 import json
 import os
+import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -213,6 +218,111 @@ def cmd_download_pass_models(args: argparse.Namespace) -> int:
     return _run([str(vpy), str(script)], cwd=root)
 
 
+def _read_ollama_model(root: Path) -> str:
+    """Read OLLAMA_MODEL from .env; fall back to qwen2.5:32b."""
+    default = "qwen2.5:32b"
+    env_file = root / ".env"
+    if not env_file.exists():
+        return default
+    for line in env_file.read_text(encoding="utf-8").splitlines():
+        m = re.match(r"^\s*OLLAMA_MODEL\s*=\s*(.+)", line)
+        if m:
+            val = m.group(1).strip().strip('"').strip("'")
+            # Strip "ollama:" prefix if present
+            val = re.sub(r"^ollama:", "", val)
+            if val:
+                return val
+    return default
+
+
+def cmd_fix_ollama(args: argparse.Namespace) -> int:
+    """Diagnose Ollama, pull primary model from .env, run a smoke test."""
+    _ = args
+    root = _project_root()
+
+    if not shutil.which("ollama"):
+        print("ERROR: ollama not found on PATH.")
+        print("Install from: https://ollama.com/download")
+        print("Then restart your shell and re-run this command.")
+        return 1
+
+    print("\n=== Ollama Diagnostics ===\n")
+
+    print("1. Installed models (ollama list):")
+    _run(["ollama", "list"], cwd=root)
+
+    print("\n2. Running models (ollama ps):")
+    _run(["ollama", "ps"], cwd=root)
+
+    model = _read_ollama_model(root)
+    print(f"\nPrimary model (from .env): {model}")
+
+    broken = "qwen3-coder:30b"
+    print(f"\n3. Removing {broken} if present...")
+    rc, _, err = _run_capture(["ollama", "rm", broken], cwd=root)
+    if rc != 0:
+        print(f"   (not present or already removed: {err})")
+
+    print(f"\n4. Pulling {model} (may take a while on first download)...")
+    rc = _run(["ollama", "pull", model], cwd=root)
+    if rc != 0:
+        print(f"Pull failed for {model}.")
+        return rc
+
+    print("\n5. Smoke test...")
+    rc, out, err = _run_capture(
+        ["ollama", "run", model, "Reply with exactly: READY"], cwd=root
+    )
+    print(out or err or "(no output)")
+
+    print("\n6. Final model list:")
+    _run(["ollama", "list"], cwd=root)
+
+    print(f"\n=== Done ===\nModel '{model}' is ready.")
+    print("Start the app with: python scripts/jat.py run")
+    return 0
+
+
+def cmd_commit(args: argparse.Namespace) -> int:
+    """Stage all changes, create a date-stamped commit, and push."""
+    root = _project_root()
+
+    if not (root / ".git").exists():
+        print("Not a git repository. Run from project root.")
+        return 1
+
+    rc, remote, _ = _run_capture(["git", "remote", "get-url", "origin"], cwd=root)
+    if rc != 0 or not remote:
+        print("No remote 'origin' configured. Add a remote and try again.")
+        return 1
+
+    rc, status, _ = _run_capture(["git", "status", "--porcelain"], cwd=root)
+    if not status:
+        print("No changes to commit. Working tree clean.")
+        return 0
+
+    rc = _run(["git", "add", "-A"], cwd=root)
+    if rc != 0:
+        return rc
+
+    date = datetime.date.today().isoformat()
+    suffix = args.message.strip() if args.message else "resume/cover pipeline and style fixes"
+    msg = f"Build: {date} - {suffix}"
+
+    rc = _run(["git", "commit", "-m", msg], cwd=root)
+    if rc != 0:
+        print("Commit failed.")
+        return rc
+
+    rc = _run(["git", "push"], cwd=root)
+    if rc != 0:
+        print("Push failed (network or auth). Fix and run 'git push' manually.")
+        return rc
+
+    print(f"Committed and pushed: {msg}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Job Application Tailor launcher")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -239,6 +349,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_models = sub.add_parser("download-pass-models", help="Download and register pass models")
     p_models.set_defaults(func=cmd_download_pass_models)
+
+    p_fix = sub.add_parser("fix-ollama", help="Diagnose Ollama and pull/verify the primary model from .env")
+    p_fix.set_defaults(func=cmd_fix_ollama)
+
+    p_commit = sub.add_parser("commit", help="Stage all changes, commit with a date-stamped message, and push")
+    p_commit.add_argument("message", nargs="?", default="", help="Optional commit message suffix")
+    p_commit.set_defaults(func=cmd_commit)
 
     return parser
 

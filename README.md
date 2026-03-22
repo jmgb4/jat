@@ -32,9 +32,7 @@ Runs fully offline with [Ollama](https://ollama.com/). DeepSeek API is optional.
 
 ## Quick Start
 
-> **Linux / macOS:** Use `setup.sh` / `run.sh` or call `python3 scripts/jat.py` directly.
-> **Windows:** Use `setup.ps1` / `run.ps1` or call `python scripts/jat.py` directly.
-> All other steps — `.env`, data files, configuration — are identical on all platforms.
+All commands use the same cross-platform launcher (`scripts/jat.py`) on every OS. Use `python3` on Linux/macOS or `python` on Windows.
 
 ```bash
 # 1. Clone
@@ -42,31 +40,19 @@ git clone https://github.com/jmgb4/jat.git
 cd jat
 
 # 2. Set up (creates venv, installs deps, installs Playwright Chromium)
-# Linux / macOS:
-./setup.sh
-# Windows PowerShell:
-# .\setup.ps1
-# Or cross-platform (any OS with Python 3 on PATH):
-# python3 scripts/jat.py setup      # Linux / macOS
-# python  scripts/jat.py setup      # Windows
+python scripts/jat.py setup          # Windows
+python3 scripts/jat.py setup         # Linux / macOS
 
 # 3. Configure
-# Linux / macOS:
-cp .env.example .env
-# Windows PowerShell:
-# copy .env.example .env
+cp .env.example .env                  # Linux / macOS
+# copy .env.example .env             # Windows
 # Edit .env: set OLLAMA_MODEL to a model you have pulled (e.g. llama3:8b)
 
 # 4. Add your data files (see Data Files Setup below)
 
 # 5. Run
-# Linux / macOS:
-./run.sh
-# Windows PowerShell:
-# .\run.ps1
-# Or cross-platform:
-# python3 scripts/jat.py run        # Linux / macOS
-# python  scripts/jat.py run        # Windows
+python scripts/jat.py run            # Windows
+python3 scripts/jat.py run          # Linux / macOS
 # Open http://127.0.0.1:8000
 ```
 
@@ -207,20 +193,20 @@ If you have multiple resume files in `data/base_resume/`, the app detects the jo
 
 ## Scripts
 
-| Script | Purpose | When to run |
-|--------|---------|-------------|
-| `python scripts/jat.py setup` | Create venv, install base dependencies, then install optional GPU stack per OS/GPU availability | First-time setup (any platform) |
-| `python scripts/jat.py run` | Start the web app (`uvicorn`). Set `JAT_NO_RELOAD=1` to disable hot-reload | Every session (any platform) |
-| `python scripts/jat.py run --skip-gpu-check` | Start app without startup GPU probe (useful while gaming / on CPU-only sessions) | Optional runtime mode |
-| `python scripts/jat.py test` | Run unit tests | During development |
-| `python scripts/jat.py gpu-check` | Print GPU/runtime readiness summary | Diagnostics |
-| `python scripts/jat.py download-pass-models` | Download and register GGUF pass models | Model setup |
-| `setup.sh` / `run.sh` | Linux / macOS convenience wrappers — call `python3 scripts/jat.py setup/run` | Linux / macOS |
-| `setup.ps1` / `run.ps1` | Windows convenience wrappers — call `python scripts/jat.py setup/run` | Windows |
-| `commit-build.ps1` | Commit all changes and push to GitHub | After code changes |
-| `fix_ollama.ps1` | Diagnose Ollama, pull primary model from `.env` | When Ollama or GPU models need checking |
-| `download_pass_models.ps1` | Download GGUF models used by the pipeline | When you want local GGUF models |
-| `build.ps1` | Build a standalone executable with PyInstaller | When you want a distributable `.exe` |
+Everything goes through one launcher: `python scripts/jat.py <command>` (Windows) or `python3 scripts/jat.py <command>` (Linux/macOS).
+
+| Command | Purpose | When to run |
+|---------|---------|-------------|
+| `setup` | Create venv, install base dependencies, then install optional GPU stack per OS/GPU | First-time setup |
+| `run` | Start the web app (`uvicorn`). Pass `--no-reload` or set `JAT_NO_RELOAD=1` to disable hot-reload | Every session |
+| `run --skip-gpu-check` | Start without the startup GPU probe (useful on CPU-only sessions) | Optional |
+| `fix-ollama` | Diagnose Ollama, pull the primary model from `.env`, run a smoke test | When Ollama or GPU needs checking |
+| `commit ["msg"]` | Stage all changes, create a date-stamped commit, and push | After code or config changes |
+| `download-pass-models` | Download and register GGUF pass models | GGUF model setup |
+| `gpu-check` | Print GPU/runtime readiness summary | Diagnostics |
+| `test` | Run the unit test suite | During development |
+
+The only remaining standalone script is `build.ps1` (Windows-only PyInstaller packaging — niche use case).
 
 ---
 
@@ -262,11 +248,11 @@ jat/
 │   ├── gpu-linux.txt
 │   └── gpu-macos.txt
 ├── requirements.txt
-├── setup.ps1                # Windows setup wrapper
-├── run.ps1                  # Windows run wrapper
-├── setup.sh                 # Linux / macOS setup wrapper
-├── run.sh                   # Linux / macOS run wrapper
-├── scripts/jat.py           # Cross-platform launcher (all platforms)
+├── scripts/
+│   ├── jat.py               # Unified cross-platform launcher (setup/run/fix-ollama/commit/…)
+│   ├── download_pass_models.py
+│   └── e2e_one_job.ps1      # E2E smoke test (PowerShell)
+├── build.ps1                # Optional: PyInstaller packaging (Windows)
 └── README.md
 ```
 
@@ -278,10 +264,10 @@ jat/
 # Unit tests (any platform)
 python scripts/jat.py test
 
-# E2E smoke test against a real job URL
-# Windows PowerShell:
+# E2E smoke test against a real job URL (requires app to be running)
+# Windows:
 .\scripts\e2e_one_job.ps1
-# Linux / macOS: run the same commands manually or adapt to a shell script
+# Linux / macOS: run the equivalent HTTP calls manually or adapt the script
 ```
 
 ---
@@ -297,5 +283,5 @@ python scripts/jat.py test
 | Generation takes a very long time / seems stuck | Each pipeline pass loads the model fresh if eviction is enabled. Try: (1) reducing `OLLAMA_NUM_CTX` in `.env`, (2) using a smaller/faster model for the draft pass via the Sequencer, or (3) checking GPU utilisation with `nvidia-smi` |
 | Out of memory (OOM) / Ollama crashes | Lower `OLLAMA_NUM_GPU` in `.env` (e.g. `OLLAMA_NUM_GPU=20`) to keep some layers on CPU, or switch to a smaller quantisation (e.g. `Q4_K_M` instead of `Q8_0`) |
 | HuggingFace rate limits when downloading GGUF models | Set `HF_TOKEN` in `.env` with a free token from [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) |
-| App restarts unexpectedly while generating | Hot-reload is watching `app/` for changes. Disable it before starting: **Linux/macOS:** `JAT_NO_RELOAD=1 ./run.sh` — **Windows:** `$env:JAT_NO_RELOAD=1; .\run.ps1` — or any platform: `python scripts/jat.py run --no-reload` |
+| App restarts unexpectedly while generating | Hot-reload watches `app/` for changes. Disable it: `python scripts/jat.py run --no-reload` (any platform), or set `JAT_NO_RELOAD=1` in your shell before running |
 | I want to avoid GPU checks for this session | Run `python scripts/jat.py run --skip-gpu-check` |
