@@ -16,4 +16,11 @@ pytest>=8.0.0
 transformers>=4.51.0
 accelerate>=0.30.0
 torch>=2.4.0
+# llama-cpp-python: plain pin below works on all platforms (builds from source or uses a generic wheel).
+# For GPU acceleration, install the matching CUDA wheel AFTER running `python scripts/jat.py setup`:
+#
+#   Windows CUDA 12.4 (cu124) — handled automatically by setup.ps1 / scripts/jat.py setup
+#   Linux   CUDA 12.4:  pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124
+#   Linux   CPU only:   pip install llama-cpp-python
+#   macOS   (Metal):    pip install llama-cpp-python   (Metal acceleration is auto-detected at runtime)
 llama-cpp-python==0.3.4

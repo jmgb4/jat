@@ -59,7 +59,7 @@ def _load_llama(path: str, config: Settings, overrides: Optional[dict[str, Any]]
         from llama_cpp import Llama
         from llama_cpp import llama_cpp as _lc
     except Exception as e:
-        # On Windows, a partially-installed wheel or missing VC++ runtime can surface as a DLL load failure.
+        # A missing or incompatible shared library (DLL on Windows, .so on Linux) can surface here.
         msg = (
             "Failed to import llama-cpp-python runtime.\n\n"
             "Most likely cause: missing llama-cpp runtime library in your virtual environment or a missing dependency.\n"
@@ -70,7 +70,8 @@ def _load_llama(path: str, config: Settings, overrides: Optional[dict[str, Any]]
             "  2) Or reinstall the package:\n"
             "     python -m pip uninstall -y llama-cpp-python\n"
             "     python -m pip install -r requirements.txt\n\n"
-            "If it worked previously, check whether antivirus quarantined the DLL or the install was interrupted."
+            "Windows: check whether antivirus quarantined the DLL or the install was interrupted.\n"
+            "Linux/macOS: ensure LD_LIBRARY_PATH or DYLD_LIBRARY_PATH includes the CUDA runtime if using GPU."
         )
         raise RuntimeError(msg) from e
 
@@ -90,8 +91,10 @@ def _load_llama(path: str, config: Settings, overrides: Optional[dict[str, Any]]
                 "- You have a CPU-only llama-cpp-python build installed.\n"
                 "- Large GGUF models will be extremely slow on CPU.\n\n"
                 "Fix:\n"
-                "1) Reinstall CUDA-enabled llama-cpp-python (cu121) from requirements.txt\n"
-                "2) Ensure CUDA 12.x runtime DLLs are available (common missing DLLs: cublas64_12.dll, cublasLt64_12.dll, cudart64_12.dll)\n"
+                "1) Reinstall CUDA-enabled llama-cpp-python from requirements.txt (see requirements/gpu-*.txt for your platform)\n"
+                "2) Windows: ensure CUDA 12.x runtime DLLs are on PATH (cublas64_12.dll, cublasLt64_12.dll, cudart64_12.dll)\n"
+                "   Linux:   ensure libcublas.so.12 and libcuda.so are on LD_LIBRARY_PATH\n"
+                "   macOS:   Metal acceleration is used instead of CUDA; check for a Metal-enabled build\n"
                 "3) Re-run python scripts/jat.py setup, then verify with:\n"
                 "   python -c \"from llama_cpp import llama_cpp as lc; print(lc.llama_supports_gpu_offload())\""
             )

@@ -1,3 +1,5 @@
 # Backward-compatible entrypoint used by pip/install tooling.
 # Main dependency definitions live under requirements/base.txt.
+# Platform-specific GPU packages live under requirements/gpu-{windows,linux,macos}.txt
+# and are installed automatically by `python scripts/jat.py setup`.
 -r requirements/base.txt

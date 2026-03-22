@@ -32,23 +32,41 @@ Runs fully offline with [Ollama](https://ollama.com/). DeepSeek API is optional.
 
 ## Quick Start
 
+> **Linux / macOS:** Use `setup.sh` / `run.sh` or call `python3 scripts/jat.py` directly.
+> **Windows:** Use `setup.ps1` / `run.ps1` or call `python scripts/jat.py` directly.
+> All other steps — `.env`, data files, configuration — are identical on all platforms.
+
 ```bash
-# 1. Clone and set up
+# 1. Clone
 git clone https://github.com/jmgb4/jat.git
 cd jat
-python scripts/jat.py setup
 
-# 2. Configure
-# macOS / Linux:
+# 2. Set up (creates venv, installs deps, installs Playwright Chromium)
+# Linux / macOS:
+./setup.sh
+# Windows PowerShell:
+# .\setup.ps1
+# Or cross-platform (any OS with Python 3 on PATH):
+# python3 scripts/jat.py setup      # Linux / macOS
+# python  scripts/jat.py setup      # Windows
+
+# 3. Configure
+# Linux / macOS:
 cp .env.example .env
 # Windows PowerShell:
 # copy .env.example .env
-# Edit .env: set OLLAMA_MODEL to a model you have pulled
+# Edit .env: set OLLAMA_MODEL to a model you have pulled (e.g. llama3:8b)
 
-# 3. Add your data (see Data Files Setup below)
+# 4. Add your data files (see Data Files Setup below)
 
-# 4. Run
-python scripts/jat.py run
+# 5. Run
+# Linux / macOS:
+./run.sh
+# Windows PowerShell:
+# .\run.ps1
+# Or cross-platform:
+# python3 scripts/jat.py run        # Linux / macOS
+# python  scripts/jat.py run        # Windows
 # Open http://127.0.0.1:8000
 ```
 
@@ -72,13 +90,27 @@ data/base_resume/
 
 These files give the AI deep knowledge of your background so it can write accurate, grounded output instead of generic filler. Six template files are included — copy each one, remove the `example_` prefix, and fill it in with your real content.
 
-```powershell
-cd data/context
+```
+data/context/
+├── example_story.txt           ← template (committed)
+├── story.txt                   ← your copy (gitignored)
+... etc
+```
 
-# Copy all templates at once (PowerShell)
+Copy all templates at once and rename them — pick the command for your shell:
+
+```powershell
+# Windows PowerShell
+cd data/context
 Get-ChildItem example_*.txt | ForEach-Object {
     Copy-Item $_ ($_.Name -replace '^example_', '')
 }
+```
+
+```bash
+# Linux / macOS (bash)
+cd data/context
+for f in example_*.txt; do cp "$f" "${f#example_}"; done
 ```
 
 | File | What to put in it |
@@ -97,7 +129,14 @@ Each `example_*.txt` file has detailed instructions at the top. The renamed file
 This directory (fully gitignored) lets the app inject your real contact info into the final output using `{{KEY}}` placeholders.
 
 ```powershell
+# Windows PowerShell
 copy data\personal\template.txt data\personal\personal_info.txt
+# Edit personal_info.txt with your name, email, phone, LinkedIn, etc.
+```
+
+```bash
+# Linux / macOS
+cp data/personal/template.txt data/personal/personal_info.txt
 # Edit personal_info.txt with your name, email, phone, LinkedIn, etc.
 ```
 
@@ -170,14 +209,14 @@ If you have multiple resume files in `data/base_resume/`, the app detects the jo
 
 | Script | Purpose | When to run |
 |--------|---------|-------------|
-| `python scripts/jat.py setup` | Create venv, install base dependencies, then install optional GPU stack per OS/GPU availability | First-time setup |
-| `python scripts/jat.py run` | Start the web app (`uvicorn`). Set `JAT_NO_RELOAD=1` to disable hot-reload | Every session |
+| `python scripts/jat.py setup` | Create venv, install base dependencies, then install optional GPU stack per OS/GPU availability | First-time setup (any platform) |
+| `python scripts/jat.py run` | Start the web app (`uvicorn`). Set `JAT_NO_RELOAD=1` to disable hot-reload | Every session (any platform) |
 | `python scripts/jat.py run --skip-gpu-check` | Start app without startup GPU probe (useful while gaming / on CPU-only sessions) | Optional runtime mode |
 | `python scripts/jat.py test` | Run unit tests | During development |
 | `python scripts/jat.py gpu-check` | Print GPU/runtime readiness summary | Diagnostics |
 | `python scripts/jat.py download-pass-models` | Download and register GGUF pass models | Model setup |
-| `setup.ps1` | Create venv, install dependencies, install Playwright Chromium | First-time setup |
-| `run.ps1` | Windows convenience wrapper for `python scripts/jat.py run` | Windows only |
+| `setup.sh` / `run.sh` | Linux / macOS convenience wrappers — call `python3 scripts/jat.py setup/run` | Linux / macOS |
+| `setup.ps1` / `run.ps1` | Windows convenience wrappers — call `python scripts/jat.py setup/run` | Windows |
 | `commit-build.ps1` | Commit all changes and push to GitHub | After code changes |
 | `fix_ollama.ps1` | Diagnose Ollama, pull primary model from `.env` | When Ollama or GPU models need checking |
 | `download_pass_models.ps1` | Download GGUF models used by the pipeline | When you want local GGUF models |
@@ -223,9 +262,11 @@ jat/
 │   ├── gpu-linux.txt
 │   └── gpu-macos.txt
 ├── requirements.txt
-├── setup.ps1
-├── run.ps1
-├── scripts/jat.py
+├── setup.ps1                # Windows setup wrapper
+├── run.ps1                  # Windows run wrapper
+├── setup.sh                 # Linux / macOS setup wrapper
+├── run.sh                   # Linux / macOS run wrapper
+├── scripts/jat.py           # Cross-platform launcher (all platforms)
 └── README.md
 ```
 
@@ -234,11 +275,13 @@ jat/
 ## Running Tests
 
 ```bash
-# Unit tests
+# Unit tests (any platform)
 python scripts/jat.py test
 
-# E2E smoke test against a real job URL (Windows PowerShell helper)
+# E2E smoke test against a real job URL
+# Windows PowerShell:
 .\scripts\e2e_one_job.ps1
+# Linux / macOS: run the same commands manually or adapt to a shell script
 ```
 
 ---
@@ -254,5 +297,5 @@ python scripts/jat.py test
 | Generation takes a very long time / seems stuck | Each pipeline pass loads the model fresh if eviction is enabled. Try: (1) reducing `OLLAMA_NUM_CTX` in `.env`, (2) using a smaller/faster model for the draft pass via the Sequencer, or (3) checking GPU utilisation with `nvidia-smi` |
 | Out of memory (OOM) / Ollama crashes | Lower `OLLAMA_NUM_GPU` in `.env` (e.g. `OLLAMA_NUM_GPU=20`) to keep some layers on CPU, or switch to a smaller quantisation (e.g. `Q4_K_M` instead of `Q8_0`) |
 | HuggingFace rate limits when downloading GGUF models | Set `HF_TOKEN` in `.env` with a free token from [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) |
-| App restarts unexpectedly while generating | Hot-reload is watching `app/` for changes. Set `JAT_NO_RELOAD=1` before `python scripts/jat.py run` to disable it |
+| App restarts unexpectedly while generating | Hot-reload is watching `app/` for changes. Disable it before starting: **Linux/macOS:** `JAT_NO_RELOAD=1 ./run.sh` — **Windows:** `$env:JAT_NO_RELOAD=1; .\run.ps1` — or any platform: `python scripts/jat.py run --no-reload` |
 | I want to avoid GPU checks for this session | Run `python scripts/jat.py run --skip-gpu-check` |
